@@ -15,6 +15,14 @@ When the a player: Joins, Leaves, Dies, Changes world, or when requested by staf
 
 The plugin saves the player's: Inventory, Enderchest, Location, Health, Hunger, XP.
 
+### DrakesCraft modality safety
+
+This fork resolves every saved world into a configured modality group. Restoring a main inventory
+or extracting recovery shulkers is blocked when the backup group differs from the player's current
+group. The default rules isolate Laboratory, Classic, SkyBlock and OneBlock while treating unmatched
+addon dimensions as Survival. Exceptional cross-group recovery requires the explicit
+`inventoryrollbackplus.restore.cross-group` permission; it is never inherited by ordinary staff.
+
 *Note: This plugin is a fork (extended version) of InventoryRollback but with more features and faster updates.*
 
 **Why should you I use this version?**

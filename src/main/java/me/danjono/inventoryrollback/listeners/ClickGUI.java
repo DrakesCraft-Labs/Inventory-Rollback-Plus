@@ -15,6 +15,7 @@ import me.danjono.inventoryrollback.gui.Buttons;
 import me.danjono.inventoryrollback.gui.InventoryName;
 import me.danjono.inventoryrollback.gui.menu.*;
 import me.danjono.inventoryrollback.inventory.RestoreInventory;
+import me.danjono.inventoryrollback.inventory.WorldGroupPolicy;
 import org.bukkit.*;
 import org.bukkit.block.ShulkerBox;
 import org.bukkit.entity.Player;
@@ -368,6 +369,10 @@ public class ClickGUI implements Listener {
                     }
 
                     Bukkit.getScheduler().runTask(main, t -> {
+                        if (!WorldGroupPolicy.mayRestore(staff, staff, data.getWorld())) {
+                            staff.closeInventory();
+                            return;
+                        }
                         staff.getInventory().addItem(firstShulker, secondShulker);
                         staff.closeInventory();
                     });
@@ -404,9 +409,15 @@ public class ClickGUI implements Listener {
                             ItemStack[] armour = data.getArmour();
 
                             // Place inventory items sync (compressed code)
-                            Future<Void> futureSetInv = main.getServer().getScheduler().callSyncMethod(main,
-                                    () -> { player.getInventory().setContents(inventory); return null; });
-                            try { futureSetInv.get(); }
+                            Future<Boolean> futureSetInv = main.getServer().getScheduler().callSyncMethod(main,
+                                    () -> {
+                                        if (!WorldGroupPolicy.mayRestore(staff, player, data.getWorld())) return false;
+                                        player.getInventory().setContents(inventory);
+                                        return true;
+                                    });
+                            try {
+                                if (!futureSetInv.get()) return;
+                            }
                             catch (ExecutionException | InterruptedException ex) { ex.printStackTrace(); }
 
                             // If 1.8, place armor contents separately
@@ -777,6 +788,10 @@ public class ClickGUI implements Listener {
                     };
 
                     Bukkit.getScheduler().runTask(main, t -> {
+                        if (!WorldGroupPolicy.mayRestore(staff, staff, data.getWorld())) {
+                            staff.closeInventory();
+                            return;
+                        }
                         staff.getInventory().addItem(shulkers.toArray(new ItemStack[0]));
                         staff.closeInventory();
                     });
@@ -813,6 +828,7 @@ public class ClickGUI implements Listener {
                             // Display inventory to player
                             Future<Void> inventoryReplaceFuture = main.getServer().getScheduler().callSyncMethod(main,
                                     () -> {
+                                        if (!WorldGroupPolicy.mayRestore(staff, player, data.getWorld())) return null;
                                         ItemStack[] enderChest = data.getEnderChest();
                                         if (enderChest == null) enderChest = new ItemStack[0];
                                         player.getEnderChest().setContents(enderChest);

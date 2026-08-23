@@ -75,6 +75,22 @@ allow-other-plugins-edit-death-inventory: false
 ## This will overwrite their current inventory completely and wipe what they currently have without backing it up first.
 restore-to-player-button: true
 
+## DrakesCraft: backups are tagged by their saved world and may only overwrite an inventory while
+## the player is inside the same modality group. Rules are full Java regular expressions.
+## Unmatched dimensions belong to Survival so addon dimensions continue sharing Survival storage.
+world-group-safety:
+  enabled: true
+  fallback-group: survival
+  groups:
+    laboratorio:
+      - '^laboratorio(?:_.*)?$'
+    clasico:
+      - '^clasico(?:_.*)?$'
+    skyblock:
+      - '^bskyblock_world(?:_.*)?$'
+    oneblock:
+      - '^oneblock_world(?:_.*)?$'
+
 ## Change this to 'false' to ignore saving if the player's inventory is empty
 save-empty-inventories: true
       

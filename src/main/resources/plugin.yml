@@ -31,6 +31,7 @@ permissions:
       inventoryrollbackplus.disable: true
       inventoryrollbackplus.reload: true
       inventoryrollbackplus.restore: true
+      inventoryrollbackplus.restore.cross-group: true
       inventoryrollbackplus.forcebackup: true
       inventoryrollbackplus.version: true
       inventoryrollbackplus.help: true
@@ -69,6 +70,9 @@ permissions:
       inventoryrollbackplus.restore.teleport:
         default: op
         description: Allow the staff member to teleport to the location where the backup was saved
+  inventoryrollbackplus.restore.cross-group:
+    description: Allows explicitly restoring a backup across configured modality groups
+    default: false
   inventoryrollbackplus.forcebackup:
     description: Forces a backup for an online player.
     default: op
