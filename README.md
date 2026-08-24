@@ -1,84 +1,155 @@
-![](https://github.com/TechnicallyCoded/Inventory-Rollback/blob/master/icons/inventoryrollbackplus_icon_128.png?raw=true)
-# InventoryRollbackPlus
+<p align="center">
+  <img src="assets/inventoryrollbackplus-drake-banner.png" alt="InventoryRollbackPlus Drake banner" width="100%">
+</p>
 
-### Introduction
+<p align="center">
+  <img src="assets/inventoryrollbackplus-drake-icon.png" alt="InventoryRollbackPlus Drake icon" width="160">
+</p>
 
-**Description**
+# InventoryRollbackPlus Drake
 
-InventoryRollbackPlus is a plugin which will backup player inventories for various events. This is very useful if players lose items due to lag, griefing and more!
+InventoryRollbackPlus Drake is the DrakesCraft-maintained fork of
+[InventoryRollbackPlus](https://github.com/TechnicallyCoded/Inventory-Rollback-Plus). It preserves
+the upstream inventory-backup and restoration workflow while adding hard separation between
+DrakesCraft game modalities.
 
-**When does the plugin backup player inventories?**
+> This repository is not the original InventoryRollbackPlus project. It contains DrakesCraft-specific
+> modifications maintained by [DrakesCraft Labs](https://github.com/DrakesCraft-Labs). See
+> [Credits and upstream](#credits-and-upstream) for the original authors and project links.
 
-When the a player: Joins, Leaves, Dies, Changes world, or when requested by staff.
+## What this fork changes
 
-**What does the plugin save?**
+The Drake fork currently adds:
 
-The plugin saves the player's: Inventory, Enderchest, Location, Health, Hunger, XP.
+- Modality-aware backups for Survival, Laboratory, Classic, SkyBlock and OneBlock.
+- A restore flow organized as `player -> modality -> event type -> backup`.
+- Filtering that prevents staff from accidentally restoring a backup from another modality.
+- Protection for full-inventory restores and recovery-shulker extraction across modality groups.
+- A dedicated `inventoryrollbackplus.restore.cross-group` permission for exceptional recoveries.
+- A forced source-inventory snapshot before every world transition.
+- A configurable five-second safety window for cross-modality travel.
+- Movement cancellation during that safety window, leaving the live inventory and teleport untouched.
+- Compatibility fallbacks for old backups whose modality was not stored explicitly.
+- Regression coverage for modality classification, filtering and cross-group restore rules.
 
-### DrakesCraft modality safety
+These changes are real server-side behavior, not documentation-only conventions. The enforcement is
+implemented in the restore GUI, item extraction paths, inventory restoration and world-transition
+listeners.
 
-This fork resolves every saved world into a configured modality group. Restoring a main inventory
-or extracting recovery shulkers is blocked when the backup group differs from the player's current
-group. The default rules isolate Laboratory, Classic, SkyBlock and OneBlock while treating unmatched
-addon dimensions as Survival. Exceptional cross-group recovery requires the explicit
-`inventoryrollbackplus.restore.cross-group` permission; it is never inherited by ordinary staff.
+## Upstream features retained
 
-The restore workflow is intentionally modality-first:
-`player -> modality -> event type -> backup`. `/irp restore <player>` first offers Survival,
-Laboratory, Classic, SkyBlock and OneBlock; the following Death, Join, Quit, World Change and
-Force Save menus show only backups recorded inside the selected modality.
+InventoryRollbackPlus creates snapshots when a player joins, quits, dies, changes world or when a
+staff member requests a force backup. A snapshot can contain:
 
-Every world transition records the source inventory before the player leaves. Cross-modality
-travel adds a configurable five-second safety window: the player must remain still while IRP
-creates the source snapshot, then the original teleport resumes. Movement cancels the transfer
-without changing the live inventory.
+- Main inventory and armor
+- Ender chest
+- Location
+- Health and hunger
+- Experience
 
-*Note: This plugin is a fork (extended version) of InventoryRollback but with more features and faster updates.*
+The upstream project also provides tab completion, one-click inventory restoration, configurable
+retention limits, YAML/MySQL storage support and an interactive recovery GUI.
 
-**Why should you I use this version?**
+## DrakesCraft restore workflow
 
-There are many core features missing from the original plugin. Here are some of the features in this version that are not present in the original:
- - Tab completion for commands
- - Single button click to restore the entire inventory
- - Help message if you run /inventoryrollback without anything else
- - & more coming soon..
+Run:
 
-**How do I use the plugin?**
+```text
+/irp restore <player>
+```
 
-When a backup is created, it is added to a list of available backups to view and restore.
+The interface first asks for a modality. The next menu shows Death, Join, Quit, World Change and
+Force Save categories, each filtered to the chosen modality. A backup from a different modality is
+blocked by default even if it is reached through an older menu or direct interaction path.
 
-Players with the required permission can open a rollback menu by running the command /ir restore <name>. You will be presented will all the recent backups the plugin has made. To view a backup just click on the corresponding icon. You can now choose to restore what you want or go back to the list of backups.
+Cross-group restoration should be reserved for trusted senior staff:
 
-The plugin saves 50 deaths and 10 joins, leaves and world changes by deafult. New deaths, joins, leaves and world changes will push old backups into deleted space :O
-You can change these values in the configuration file.
+```text
+inventoryrollbackplus.restore.cross-group
+```
 
-### Documentation
+Do not grant `inventoryrollbackplus.*` to ordinary staff. Prefer the smallest set of permissions
+required for their role.
 
-**Commands**
+## Commands
 
- - /ir restore <player> - Open a menu to view all player backups
- - /ir forcebackup <player> - Create a backup manually
- - /ir enable - Enable the plugin if disabled
- - /ir disable - Disable the plugin if enabled
- - /ir reload - Reload the configuration file
+| Command | Purpose |
+| --- | --- |
+| `/irp restore <player>` | Open the modality-aware backup browser. |
+| `/irp forcebackup <player>` | Create a manual player backup. |
+| `/irp enable` | Enable backup processing. |
+| `/irp disable` | Disable backup processing. |
+| `/irp reload` | Reload the plugin configuration. |
+| `/irp version` | Show build and attribution information. |
 
-**Permissions**
+The aliases `/ir`, `/inventoryrollback` and `/inventoryrollbackplus` remain available for upstream
+compatibility.
 
- - inventoryrollbackplus.viewbackups - (Default: OP) Allow /ir restore command (without ability to give items back)
- - inventoryrollbackplus.restore - (Default: OP) Allow /ir restore command
- - inventoryrollbackplus.restore.teleport - (Default: OP) Allow player to teleport to location of backup
- - inventoryrollbackplus.forcebackup - (Default: OP) Allow /ir forcebackup command
- - inventoryrollbackplus.enable - (Default: OP) Allow /ir enable command
- - inventoryrollbackplus.disable - (Default: OP) Allow /ir disable command
- - inventoryrollbackplus.reload - (Default: OP) Allow /ir reload command
- - inventoryrollbackplus.adminalerts - (Default: OP) Allow viewing important information for admins when they join
+## Permissions
 
- - inventoryrollbackplus.deathsave - (Default: All) Allow backup on death
- - inventoryrollbackplus.joinsave - (Default: All) Allow backup on join
- - inventoryrollbackplus.leavesave - (Default: All) Allow backup on leave
- - inventoryrollbackplus.worldchangesave - (Default: All) Allow backup on world change
- - inventoryrollbackplus.help - (Default: All) Allow viewing the help message of the plugin
- - inventoryrollbackplus.version - (Default: All) Allow viewing version of the plugin
+### Staff permissions
 
-## Download Link
-[https://modrinth.com/plugin/inventoryrollbackplus](https://modrinth.com/plugin/inventoryrollbackplus)
+| Permission | Default | Purpose |
+| --- | --- | --- |
+| `inventoryrollbackplus.viewbackups` | OP | Browse backups without restoring them. |
+| `inventoryrollbackplus.restore` | OP | Restore inventory data from the recovery GUI. |
+| `inventoryrollbackplus.restore.teleport` | OP | Teleport to a saved backup location. |
+| `inventoryrollbackplus.restore.cross-group` | OP | Bypass modality isolation for an exceptional recovery. |
+| `inventoryrollbackplus.forcebackup` | OP | Create a manual backup. |
+| `inventoryrollbackplus.enable` | OP | Enable backup processing. |
+| `inventoryrollbackplus.disable` | OP | Disable backup processing. |
+| `inventoryrollbackplus.reload` | OP | Reload configuration. |
+| `inventoryrollbackplus.adminalerts` | OP | Receive administrative backup alerts. |
+
+### Player/event permissions
+
+| Permission | Default | Purpose |
+| --- | --- | --- |
+| `inventoryrollbackplus.deathsave` | Everyone | Save a snapshot on death. |
+| `inventoryrollbackplus.joinsave` | Everyone | Save a snapshot on join. |
+| `inventoryrollbackplus.leavesave` | Everyone | Save a snapshot on quit. |
+| `inventoryrollbackplus.worldchangesave` | Everyone | Save a snapshot on world change. |
+| `inventoryrollbackplus.help` | Everyone | View command help. |
+| `inventoryrollbackplus.version` | Everyone | View version information. |
+
+## Building
+
+Requirements:
+
+- Java 21
+- Maven 3.9+
+
+Build and run the test suite with:
+
+```bash
+mvn clean verify
+```
+
+The compiled plugin is written to `target/`. Never reload InventoryRollbackPlus with PlugMan on a
+production server; stage the JAR and activate it through a controlled restart.
+
+## Credits and upstream
+
+InventoryRollbackPlus Drake exists because of the work of the original projects and their authors:
+
+- **danjono** — original author of
+  [InventoryRollback](https://www.spigotmc.org/resources/inventory-rollback.48074/), the foundation of
+  the recovery system and the `me.danjono.inventoryrollback` code retained in this project.
+- **TechnicallyCoded** — author and maintainer of
+  [InventoryRollbackPlus](https://github.com/TechnicallyCoded/Inventory-Rollback-Plus), which extended
+  the original plugin and is the direct upstream of this fork.
+- **InventoryRollbackPlus contributors** — contributors to the upstream implementation and its
+  compatibility work.
+- **DrakesCraft Labs / Jack** — modality isolation, transition safeguards, Drake-specific recovery
+  workflow, regression tests, maintenance and branding in this fork.
+
+Upstream release page: [InventoryRollbackPlus on Modrinth](https://modrinth.com/plugin/inventoryrollbackplus).
+Issues specific to this fork should be reported to the DrakesCraft Labs repository rather than to the
+upstream author unless they can be reproduced on an unmodified upstream build.
+
+## License
+
+Copyright and authorship notices from InventoryRollback and InventoryRollbackPlus are preserved.
+Review [`LICENSE`](LICENSE), [`OLD_LICENSE`](OLD_LICENSE) and
+[`src/main/resources/LICENSE`](src/main/resources/LICENSE) before redistribution. The new Drake
+branding does not replace or weaken any upstream attribution or license requirement.
