@@ -8,6 +8,7 @@ import me.danjono.inventoryrollback.data.LogType;
 import me.danjono.inventoryrollback.data.PlayerData;
 import me.danjono.inventoryrollback.gui.Buttons;
 import me.danjono.inventoryrollback.gui.InventoryName;
+import me.danjono.inventoryrollback.inventory.WorldGroupPolicy;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
@@ -29,6 +30,7 @@ public class EnderChestBackupMenu {
     private LogType logType;
     private Long timestamp;
     private ItemStack[] enderchest;
+    private String backupWorld;
 
     private Buttons buttons;
     private Inventory inventory;
@@ -41,6 +43,7 @@ public class EnderChestBackupMenu {
         this.logType = data.getLogType();
         this.timestamp = data.getTimestamp();
         this.enderchest = data.getEnderChest();
+        this.backupWorld = data.getWorld();
         this.pageNumber = pageNumberIn;
         this.buttons = new Buttons(playerUUID);
         
@@ -49,6 +52,7 @@ public class EnderChestBackupMenu {
 
     public void createInventory() {
         inventory = Bukkit.createInventory(staff, InventoryName.ENDER_CHEST_BACKUP.getSize(), InventoryName.ENDER_CHEST_BACKUP.getName());
+        WorldGroupPolicy.registerBackupInventory(inventory, backupWorld);
 
         List<String> lore = new ArrayList<>();
         if (pageNumber == 1) {

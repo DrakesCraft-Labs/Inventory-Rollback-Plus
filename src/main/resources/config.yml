@@ -80,6 +80,8 @@ restore-to-player-button: true
 ## Unmatched dimensions belong to Survival so addon dimensions continue sharing Survival storage.
 world-group-safety:
   enabled: true
+  ## Keep false in production. Enabling this allows holders of the dedicated permission to cross modalities.
+  allow-permission-bypass: false
   fallback-group: survival
   groups:
     laboratorio:

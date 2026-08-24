@@ -31,7 +31,6 @@ permissions:
       inventoryrollbackplus.disable: true
       inventoryrollbackplus.reload: true
       inventoryrollbackplus.restore: true
-      inventoryrollbackplus.restore.cross-group: true
       inventoryrollbackplus.forcebackup: true
       inventoryrollbackplus.version: true
       inventoryrollbackplus.help: true

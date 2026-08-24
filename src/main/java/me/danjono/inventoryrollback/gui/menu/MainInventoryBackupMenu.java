@@ -8,6 +8,7 @@ import me.danjono.inventoryrollback.data.LogType;
 import me.danjono.inventoryrollback.data.PlayerData;
 import me.danjono.inventoryrollback.gui.Buttons;
 import me.danjono.inventoryrollback.gui.InventoryName;
+import me.danjono.inventoryrollback.inventory.WorldGroupPolicy;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
@@ -66,6 +67,7 @@ public class MainInventoryBackupMenu {
 	
 	public void createInventory() {
 	    inventory = Bukkit.createInventory(staff, InventoryName.MAIN_BACKUP.getSize(), InventoryName.MAIN_BACKUP.getName());
+	    WorldGroupPolicy.registerBackupInventory(inventory, location == null ? null : location.split(",", 2)[0]);
 	    
 	    //Add back button
         inventory.setItem(45, buttons.inventoryMenuBackButton(MessageData.getBackButton(), logType, timestamp));

@@ -92,9 +92,10 @@
             <scope>compile</scope>
         </dependency>
         <dependency>
-            <groupId>com.tcoded.lightlibs</groupId>
+            <!-- The original 0.0.22 repository artifact disappeared; pin the audited upstream source commit. -->
+            <groupId>com.github.lightlibs</groupId>
             <artifactId>BukkitVersion</artifactId>
-            <version>0.0.22</version>
+            <version>e09db5c2dc1026c0e3e54fe32512343a2375643d</version>
             <scope>compile</scope>
         </dependency>
         <dependency>
@@ -135,6 +136,11 @@
             </resource>
         </resources>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -217,6 +223,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
+                <version>3.4.2</version>
                 <configuration>
                     <archive>
                         <manifestEntries>

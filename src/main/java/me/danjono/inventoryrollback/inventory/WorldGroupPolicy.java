@@ -3,21 +3,29 @@ package me.danjono.inventoryrollback.inventory;
 import me.danjono.inventoryrollback.InventoryRollback;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.Inventory;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.WeakHashMap;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
 /** Prevents a backup from one game modality overwriting another modality's inventory. */
 public final class WorldGroupPolicy {
     public static final String BYPASS_PERMISSION = "inventoryrollbackplus.restore.cross-group";
+    private static final Map<Inventory, String> BACKUP_WORLDS =
+            Collections.synchronizedMap(new WeakHashMap<Inventory, String>());
 
     private WorldGroupPolicy() {}
 
     public static boolean mayRestore(Player staff, Player target, String backupWorld) {
         if (!InventoryRollback.getInstance().getConfig().getBoolean("world-group-safety.enabled", true)) return true;
-        if (staff.hasPermission(BYPASS_PERMISSION)) return true;
+        if (InventoryRollback.getInstance().getConfig().getBoolean("world-group-safety.allow-permission-bypass", false)
+                && staff.hasPermission(BYPASS_PERMISSION)) return true;
         String currentWorld = target.getWorld().getName();
         String backupGroup = groupOf(backupWorld,
                 InventoryRollback.getInstance().getConfig().getConfigurationSection("world-group-safety.groups"));
@@ -31,10 +39,20 @@ public final class WorldGroupPolicy {
         return false;
     }
 
+    /** Associates a backup GUI with its source world without retaining closed inventories forever. */
+    public static void registerBackupInventory(Inventory inventory, String backupWorld) {
+        if (inventory != null) BACKUP_WORLDS.put(inventory, backupWorld);
+    }
+
+    /** Applies the same modality boundary to direct item extraction from a backup GUI. */
+    public static boolean mayExtract(Player staff, Inventory inventory) {
+        String backupWorld = BACKUP_WORLDS.get(inventory);
+        return backupWorld != null && mayRestore(staff, staff, backupWorld);
+    }
+
     /** Resolves ordered regex rules; unmatched normal worlds remain in the configured fallback group. */
     static String groupOf(String world, ConfigurationSection groups) {
         if (world == null || world.trim().isEmpty()) return "unknown";
-        String normalized = world.toLowerCase(Locale.ROOT);
         if (groups != null) {
             for (String group : groups.getKeys(false)) {
                 List<String> expressions = groups.getStringList(group);
@@ -50,7 +68,27 @@ public final class WorldGroupPolicy {
                 }
             }
         }
+        String builtInGroup = builtInGroupOf(world);
+        if (builtInGroup != null) return builtInGroup;
         return InventoryRollback.getInstance().getConfig().getString("world-group-safety.fallback-group", "survival")
                 .toLowerCase(Locale.ROOT);
+    }
+
+    /** Safe defaults keep old production configs protected before administrators add custom rules. */
+    static String builtInGroupOf(String world) {
+        if (world == null || world.trim().isEmpty()) return "unknown";
+        Map<String, List<String>> groups = new java.util.LinkedHashMap<>();
+        groups.put("laboratorio", Arrays.asList("^laboratorio(?:_.*)?$"));
+        groups.put("clasico", Arrays.asList("^clasico(?:_.*)?$"));
+        groups.put("skyblock", Arrays.asList("^bskyblock_world(?:_.*)?$"));
+        groups.put("oneblock", Arrays.asList("^oneblock_world(?:_.*)?$"));
+        for (Map.Entry<String, List<String>> entry : groups.entrySet()) {
+            for (String expression : entry.getValue()) {
+                if (Pattern.compile(expression, Pattern.CASE_INSENSITIVE).matcher(world).matches()) {
+                    return entry.getKey();
+                }
+            }
+        }
+        return null;
     }
 }

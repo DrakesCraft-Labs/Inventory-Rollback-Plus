@@ -15,6 +15,7 @@ import me.danjono.inventoryrollback.gui.Buttons;
 import me.danjono.inventoryrollback.gui.InventoryName;
 import me.danjono.inventoryrollback.gui.menu.*;
 import me.danjono.inventoryrollback.inventory.RestoreInventory;
+import me.danjono.inventoryrollback.inventory.SaveInventory;
 import me.danjono.inventoryrollback.inventory.WorldGroupPolicy;
 import org.bukkit.*;
 import org.bukkit.block.ShulkerBox;
@@ -412,6 +413,9 @@ public class ClickGUI implements Listener {
                             Future<Boolean> futureSetInv = main.getServer().getScheduler().callSyncMethod(main,
                                     () -> {
                                         if (!WorldGroupPolicy.mayRestore(staff, player, data.getWorld())) return false;
+                                        // Preserve an undo point before IRP overwrites any live player data.
+                                        new SaveInventory(player, LogType.FORCE, null, "PRE_RESTORE")
+                                                .snapshotAndSave(player.getInventory(), player.getEnderChest(), false);
                                         player.getInventory().setContents(inventory);
                                         return true;
                                     });
@@ -618,7 +622,7 @@ public class ClickGUI implements Listener {
                 e.setCancelled(false);
             } else if (isValidBackupMenuInteraction) {
                 if (staff.hasPermission("inventoryrollbackplus.restore")) {
-                    e.setCancelled(false);
+                    e.setCancelled(!WorldGroupPolicy.mayExtract(staff, e.getView().getTopInventory()));
                 } else {
                     staff.sendMessage(MessageData.getPluginPrefix() + MessageData.getNoPermission());
                 }
@@ -826,30 +830,35 @@ public class ClickGUI implements Listener {
                             }
 
                             // Display inventory to player
-                            Future<Void> inventoryReplaceFuture = main.getServer().getScheduler().callSyncMethod(main,
+                            Future<Boolean> inventoryReplaceFuture = main.getServer().getScheduler().callSyncMethod(main,
                                     () -> {
-                                        if (!WorldGroupPolicy.mayRestore(staff, player, data.getWorld())) return null;
+                                        if (!WorldGroupPolicy.mayRestore(staff, player, data.getWorld())) return false;
+                                        // Preserve an undo point before IRP overwrites any live player data.
+                                        new SaveInventory(player, LogType.FORCE, null, "PRE_RESTORE")
+                                                .snapshotAndSave(player.getInventory(), player.getEnderChest(), false);
                                         ItemStack[] enderChest = data.getEnderChest();
                                         if (enderChest == null) enderChest = new ItemStack[0];
                                         player.getEnderChest().setContents(enderChest);
-                                        return null;
+                                        return true;
                                     });
 
                             //If the backup file is invalid it will return null, we want to catch it here
                             try {
-                                inventoryReplaceFuture.get();
+                                if (!inventoryReplaceFuture.get()) return;
                             } catch (NullPointerException | ExecutionException | InterruptedException ex) {
                                 ex.printStackTrace();
+                                return;
                             }
+
+                            if (SoundData.isInventoryRestoreEnabled()) {
+                                main.getServer().getScheduler().runTask(main,
+                                        () -> player.playSound(player.getLocation(), SoundData.getInventoryRestored(), 1, 1));
+                            }
+                            player.sendMessage(MessageData.getPluginPrefix() + MessageData.getEnderChestRestoredPlayer(staff.getName()));
+                            if (!staff.getUniqueId().equals(player.getUniqueId()))
+                                staff.sendMessage(MessageData.getPluginPrefix() + MessageData.getEnderChestRestored(offlinePlayer.getName()));
                         }
                     }.runTaskAsynchronously(main);
-
-                    if (SoundData.isInventoryRestoreEnabled())
-                        player.playSound(player.getLocation(), SoundData.getInventoryRestored(), 1, 1); 
-
-                    player.sendMessage(MessageData.getPluginPrefix() + MessageData.getEnderChestRestoredPlayer(staff.getName()));
-                    if (!staff.getUniqueId().equals(player.getUniqueId()))
-                        staff.sendMessage(MessageData.getPluginPrefix() + MessageData.getEnderChestRestored(offlinePlayer.getName()));
                 } else {
                     staff.sendMessage(MessageData.getPluginPrefix() + MessageData.getEnderChestNotOnline(offlinePlayer.getName()));
                 }
@@ -867,7 +876,7 @@ public class ClickGUI implements Listener {
                     staff.sendMessage(MessageData.getPluginPrefix() + MessageData.getNoPermission());
                     return;
                 }
-                e.setCancelled(false);
+                e.setCancelled(!WorldGroupPolicy.mayExtract(staff, e.getView().getTopInventory()));
             }
         }
     }
