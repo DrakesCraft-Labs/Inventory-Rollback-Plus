@@ -4,6 +4,8 @@ import me.danjono.inventoryrollback.InventoryRollback;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.ItemStack;
+import com.nuclyon.technicallycoded.inventoryrollback.customdata.CustomDataItemEditor;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -17,6 +19,7 @@ import java.util.regex.PatternSyntaxException;
 /** Prevents a backup from one game modality overwriting another modality's inventory. */
 public final class WorldGroupPolicy {
     public static final String BYPASS_PERMISSION = "inventoryrollbackplus.restore.cross-group";
+    public static final String GROUP_DATA_KEY = "worldGroup";
     private static final Map<Inventory, String> BACKUP_WORLDS =
             Collections.synchronizedMap(new WeakHashMap<Inventory, String>());
 
@@ -48,6 +51,24 @@ public final class WorldGroupPolicy {
     public static boolean mayExtract(Player staff, Inventory inventory) {
         String backupWorld = BACKUP_WORLDS.get(inventory);
         return backupWorld != null && mayRestore(staff, staff, backupWorld);
+    }
+
+    /** Carries the selected modality through every GUI navigation button. */
+    public static ItemStack tagGroup(ItemStack item, String group) {
+        if (item == null || group == null) return item;
+        CustomDataItemEditor editor = CustomDataItemEditor.editItem(item);
+        editor.setString(GROUP_DATA_KEY, group);
+        return editor.setItemData();
+    }
+
+    public static List<String> knownGroups() {
+        return Arrays.asList("survival", "laboratorio", "clasico", "skyblock", "oneblock");
+    }
+
+    /** Resolves a world using custom rules first and built-in safe defaults second. */
+    public static String groupOfWorld(String world) {
+        return groupOf(world,
+                InventoryRollback.getInstance().getConfig().getConfigurationSection("world-group-safety.groups"));
     }
 
     /** Resolves ordered regex rules; unmatched normal worlds remain in the configured fallback group. */

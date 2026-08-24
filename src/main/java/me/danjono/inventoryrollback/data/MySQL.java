@@ -8,6 +8,7 @@ import me.danjono.inventoryrollback.config.ConfigData;
 import me.danjono.inventoryrollback.gui.InventoryName;
 import me.danjono.inventoryrollback.inventory.RestoreInventory;
 import me.danjono.inventoryrollback.inventory.SaveInventory;
+import me.danjono.inventoryrollback.inventory.WorldGroupPolicy;
 import org.bukkit.inventory.ItemStack;
 
 import java.sql.*;
@@ -289,6 +290,42 @@ public class MySQL {
                 try (ResultSet rs = stmt.executeQuery()) {
                     while (rs.next())
                         timestamps.add(rs.getLong(1));
+                }
+            }
+            return timestamps;
+        }
+    }
+
+    /** Returns every backup timestamp, newest first, for modality-aware filtering. */
+    public List<Long> getAllTimestamps() throws SQLException {
+        try (Connection conn = getConnection()) {
+            List<Long> timestamps = new ArrayList<>();
+            String query = "SELECT timestamp FROM " + backupTable.getTableName()
+                    + " WHERE uuid = ? ORDER BY timestamp DESC";
+            try (PreparedStatement stmt = conn.prepareStatement(query)) {
+                stmt.setString(1, uuid.toString());
+                try (ResultSet rs = stmt.executeQuery()) {
+                    while (rs.next()) timestamps.add(rs.getLong(1));
+                }
+            }
+            return timestamps;
+        }
+    }
+
+    /** Fetches timestamp and world together so modality menus do not issue one query per backup. */
+    public List<Long> getTimestampsForGroup(String group) throws SQLException {
+        try (Connection conn = getConnection()) {
+            List<Long> timestamps = new ArrayList<>();
+            String query = "SELECT timestamp, location_world FROM " + backupTable.getTableName()
+                    + " WHERE uuid = ? ORDER BY timestamp DESC";
+            try (PreparedStatement stmt = conn.prepareStatement(query)) {
+                stmt.setString(1, uuid.toString());
+                try (ResultSet rs = stmt.executeQuery()) {
+                    while (rs.next()) {
+                        if (group.equals(WorldGroupPolicy.groupOfWorld(rs.getString("location_world")))) {
+                            timestamps.add(rs.getLong("timestamp"));
+                        }
+                    }
                 }
             }
             return timestamps;

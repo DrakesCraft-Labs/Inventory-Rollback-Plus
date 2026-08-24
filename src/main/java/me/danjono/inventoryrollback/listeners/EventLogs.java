@@ -1,14 +1,17 @@
 package me.danjono.inventoryrollback.listeners;
 
 import com.nuclyon.technicallycoded.inventoryrollback.InventoryRollbackPlus;
+import me.danjono.inventoryrollback.InventoryRollback;
 import com.tcoded.lightlibs.bukkitversion.BukkitVersion;
 import me.danjono.inventoryrollback.config.ConfigData;
 import me.danjono.inventoryrollback.data.LogType;
 import me.danjono.inventoryrollback.inventory.SaveInventory;
+import me.danjono.inventoryrollback.inventory.WorldGroupPolicy;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
+import org.bukkit.Location;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.HandlerList;
@@ -17,6 +20,8 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.RegisteredListener;
@@ -29,11 +34,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import org.bukkit.scheduler.BukkitTask;
 
 public class EventLogs implements Listener {
 
 	private InventoryRollbackPlus main;
 	private Map<UUID, SaveInventory.PlayerDataSnapshot> inventoryCache;
+	private final Map<UUID, PendingTransfer> pendingTransfers = new ConcurrentHashMap<>();
+	private final java.util.Set<UUID> approvedTransfers = ConcurrentHashMap.newKeySet();
+	private final java.util.Set<UUID> preBackedUpTransfers = ConcurrentHashMap.newKeySet();
 
 	public EventLogs() {
 		this.main = InventoryRollbackPlus.getInstance();
@@ -82,6 +91,9 @@ public class EventLogs implements Listener {
 		if (!ConfigData.isEnabled()) return;
 
 		Player player = e.getPlayer();
+		cancelPendingTransfer(player.getUniqueId(), null);
+		approvedTransfers.remove(player.getUniqueId());
+		preBackedUpTransfers.remove(player.getUniqueId());
 
 		if (player.hasPermission("inventoryrollbackplus.leavesave")) {
 			new SaveInventory(e.getPlayer(), LogType.QUIT, null, null)
@@ -99,6 +111,112 @@ public class EventLogs implements Listener {
 			// Cleanup the player's data
 			SaveInventory.cleanup(uuid);
 		}, 1);
+	}
+
+	/**
+	 * Saves the source inventory before every world transition. Cross-modality transitions are
+	 * delayed so the snapshot is durable before another inventory manager swaps player data.
+	 */
+	@EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+	public void beforeWorldTransfer(PlayerTeleportEvent event) {
+		if (!ConfigData.isEnabled() || event.getTo() == null) return;
+		Player player = event.getPlayer();
+		if (event.getFrom().getWorld() == null || event.getTo().getWorld() == null
+				|| event.getFrom().getWorld().equals(event.getTo().getWorld())) return;
+
+		UUID uuid = player.getUniqueId();
+		if (approvedTransfers.remove(uuid)) return;
+		String sourceGroup = WorldGroupPolicy.groupOfWorld(event.getFrom().getWorld().getName());
+		String destinationGroup = WorldGroupPolicy.groupOfWorld(event.getTo().getWorld().getName());
+
+		if (sourceGroup.equals(destinationGroup)) {
+			backupTransferSource(player, sourceGroup, destinationGroup);
+			markPreBackedUp(uuid);
+			return;
+		}
+
+		event.setCancelled(true);
+		if (pendingTransfers.containsKey(uuid)) {
+			player.sendMessage("§e[InventoryRollbackPlus] A modality transfer is already being prepared.");
+			return;
+		}
+
+		int seconds = Math.max(1, InventoryRollback.getInstance().getConfig()
+				.getInt("world-transfer-safety.delay-seconds", 5));
+		Location origin = player.getLocation().clone();
+		Location destination = event.getTo().clone();
+		PlayerTeleportEvent.TeleportCause cause = event.getCause();
+		player.sendMessage("§bStay still: taking you to §f" + destinationGroup
+				+ "§b and backing up your §f" + sourceGroup + "§b inventory. Wait §f" + seconds + " seconds§b.");
+
+		BukkitTask task = main.getServer().getScheduler().runTaskLater(main, () -> {
+			PendingTransfer pending = pendingTransfers.remove(uuid);
+			if (pending == null || !player.isOnline()) return;
+			if (!samePosition(player.getLocation(), pending.origin)) {
+				player.sendMessage("§cModality transfer cancelled because you moved.");
+				return;
+			}
+			backupTransferSource(player, pending.sourceGroup, pending.destinationGroup);
+			markPreBackedUp(uuid);
+			approvedTransfers.add(uuid);
+			boolean teleported = player.teleport(pending.destination, pending.cause);
+			if (!teleported) {
+				approvedTransfers.remove(uuid);
+				player.sendMessage("§cThe modality transfer failed safely; your source inventory was backed up.");
+			}
+		}, seconds * 20L);
+		pendingTransfers.put(uuid, new PendingTransfer(origin, destination, sourceGroup, destinationGroup, cause, task));
+	}
+
+	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+	public void cancelTransferOnMovement(PlayerMoveEvent event) {
+		PendingTransfer pending = pendingTransfers.get(event.getPlayer().getUniqueId());
+		if (pending == null || event.getTo() == null || samePosition(event.getTo(), pending.origin)) return;
+		cancelPendingTransfer(event.getPlayer().getUniqueId(), "§cModality transfer cancelled because you moved.");
+	}
+
+	private void backupTransferSource(Player player, String sourceGroup, String destinationGroup) {
+		if (!player.hasPermission("inventoryrollbackplus.worldchangesave")) return;
+		new SaveInventory(player, LogType.WORLD_CHANGE, null,
+				"TRANSFER_" + sourceGroup.toUpperCase() + "_TO_" + destinationGroup.toUpperCase())
+				.snapshotAndSave(player.getInventory(), player.getEnderChest(), false);
+	}
+
+	private void markPreBackedUp(UUID uuid) {
+		preBackedUpTransfers.add(uuid);
+		main.getServer().getScheduler().runTaskLater(main, () -> preBackedUpTransfers.remove(uuid), 2L);
+	}
+
+	private void cancelPendingTransfer(UUID uuid, String message) {
+		PendingTransfer pending = pendingTransfers.remove(uuid);
+		if (pending == null) return;
+		pending.task.cancel();
+		Player player = main.getServer().getPlayer(uuid);
+		if (message != null && player != null) player.sendMessage(message);
+	}
+
+	private static boolean samePosition(Location first, Location second) {
+		return first.getWorld() != null && first.getWorld().equals(second.getWorld())
+				&& first.distanceSquared(second) <= 0.01D;
+	}
+
+	private static final class PendingTransfer {
+		private final Location origin;
+		private final Location destination;
+		private final String sourceGroup;
+		private final String destinationGroup;
+		private final PlayerTeleportEvent.TeleportCause cause;
+		private final BukkitTask task;
+
+		private PendingTransfer(Location origin, Location destination, String sourceGroup, String destinationGroup,
+				PlayerTeleportEvent.TeleportCause cause, BukkitTask task) {
+			this.origin = origin;
+			this.destination = destination;
+			this.sourceGroup = sourceGroup;
+			this.destinationGroup = destinationGroup;
+			this.cause = cause;
+			this.task = task;
+		}
 	}
 
 	/**
@@ -222,6 +340,7 @@ public class EventLogs implements Listener {
 		if (!ConfigData.isEnabled()) return;
 
 		Player player = e.getPlayer();
+		if (preBackedUpTransfers.remove(player.getUniqueId())) return;
 
 		if (player.hasPermission("inventoryrollbackplus.worldchangesave")) {
 			new SaveInventory(e.getPlayer(), LogType.WORLD_CHANGE, null, null)

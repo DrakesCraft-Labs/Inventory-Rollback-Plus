@@ -16,6 +16,7 @@ import me.danjono.inventoryrollback.data.LogType;
 import me.danjono.inventoryrollback.data.PlayerData;
 import me.danjono.inventoryrollback.gui.Buttons;
 import me.danjono.inventoryrollback.gui.InventoryName;
+import me.danjono.inventoryrollback.inventory.WorldGroupPolicy;
 
 public class RollbackListMenu {
 
@@ -24,14 +25,16 @@ public class RollbackListMenu {
     private Player staff;
     private UUID playerUUID;
     private LogType logType;
+    private String worldGroup;
     
     private Buttons buttons;
     private Inventory inventory;
 
-    public RollbackListMenu(Player staff, OfflinePlayer player, LogType logType, int pageNumberIn) {
+    public RollbackListMenu(Player staff, OfflinePlayer player, LogType logType, String worldGroup, int pageNumberIn) {
         this.staff = staff;
         this.playerUUID = player.getUniqueId();
         this.logType = logType;
+        this.worldGroup = worldGroup;
         this.pageNumber = pageNumberIn;
         this.buttons = new Buttons(playerUUID);
         
@@ -44,14 +47,14 @@ public class RollbackListMenu {
         List<String> lore = new ArrayList<>();  
         if (pageNumber == 1) {
             ItemStack mainMenu = buttons.backButton(MessageData.getMainMenuButton(), logType, 0, null);                     
-            inventory.setItem(InventoryName.ROLLBACK_LIST.getSize() - 8, mainMenu);
+            inventory.setItem(InventoryName.ROLLBACK_LIST.getSize() - 8, WorldGroupPolicy.tagGroup(mainMenu, worldGroup));
         }       
 
         if (pageNumber > 1) {
             lore.add("Page " + (pageNumber - 1));
             ItemStack previousPage = buttons.backButton(MessageData.getPreviousPageButton(), logType, pageNumber - 1, lore);
 
-            inventory.setItem(InventoryName.ROLLBACK_LIST.getSize() - 8, previousPage);
+            inventory.setItem(InventoryName.ROLLBACK_LIST.getSize() - 8, WorldGroupPolicy.tagGroup(previousPage, worldGroup));
             lore.clear();
         }
     }
@@ -64,7 +67,8 @@ public class RollbackListMenu {
         PlayerData playerData = new PlayerData(playerUUID, logType, null);
 
         //Check how many backups there are in total
-        int backups = playerData.getAmountOfBackups();
+        List<Long> groupTimestamps = playerData.getTimestampsForGroup(worldGroup);
+        int backups = groupTimestamps.size();
 
         //How many rows are required
         int spaceRequired = InventoryName.ROLLBACK_LIST.getSize() - 9;
@@ -81,7 +85,9 @@ public class RollbackListMenu {
 
         int backupsAlreadyPassed = spaceRequired * (pageNumber - 1);
         int backupsOnCurrentPage = Math.min(backups, Math.min(spaceRequired, backups - backupsAlreadyPassed));
-        List<Long> timeStamps = playerData.getSelectedPageTimestamps(pageNumber);
+        int fromIndex = Math.min(backupsAlreadyPassed, groupTimestamps.size());
+        int toIndex = Math.min(fromIndex + spaceRequired, groupTimestamps.size());
+        List<Long> timeStamps = groupTimestamps.subList(fromIndex, toIndex);
 
         int position = 0;
         for (int i = 0; i < backupsOnCurrentPage; i++) {
@@ -111,8 +117,7 @@ public class RollbackListMenu {
                 lore.add(MessageData.getDeathLocationZ(z));
 
                 ItemStack item = buttons.createInventoryButton(new ItemStack(Material.CHEST), logType, location, timestamp, displayName, lore);
-
-                inventory.setItem(position, item);
+                inventory.setItem(position, WorldGroupPolicy.tagGroup(item, worldGroup));
 
             } catch (IndexOutOfBoundsException e) {
                 e.printStackTrace();
@@ -126,7 +131,7 @@ public class RollbackListMenu {
             lore.add("Page " + (pageNumber + 1));
             ItemStack nextPage = buttons.nextButton(MessageData.getNextPageButton(), logType, pageNumber + 1, lore);
 
-            inventory.setItem(position + 7, nextPage);
+            inventory.setItem(position + 7, WorldGroupPolicy.tagGroup(nextPage, worldGroup));
             lore.clear();
         }
     }

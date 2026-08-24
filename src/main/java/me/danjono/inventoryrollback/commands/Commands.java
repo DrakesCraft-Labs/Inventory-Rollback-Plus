@@ -7,7 +7,7 @@ import me.danjono.inventoryrollback.data.LogType;
 import me.danjono.inventoryrollback.data.MySQL;
 import me.danjono.inventoryrollback.data.YAML;
 import me.danjono.inventoryrollback.gui.menu.MainMenu;
-import me.danjono.inventoryrollback.gui.menu.PlayerMenu;
+import me.danjono.inventoryrollback.gui.menu.ModalityMenu;
 import me.danjono.inventoryrollback.inventory.SaveInventory;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
@@ -118,10 +118,8 @@ public class Commands extends ConfigData implements CommandExecutor, TabComplete
     }
 
     private void openPlayerMenu(Player staff, OfflinePlayer offlinePlayer) {
-        PlayerMenu menu = new PlayerMenu(staff, offlinePlayer);
-
+        ModalityMenu menu = new ModalityMenu(staff, offlinePlayer);
         staff.openInventory(menu.getInventory());
-        Bukkit.getScheduler().runTaskAsynchronously(InventoryRollback.getInstance(), menu::getPlayerMenu);
     }
 
     private void forceBackupCommand(CommandSender sender, String[] args) {

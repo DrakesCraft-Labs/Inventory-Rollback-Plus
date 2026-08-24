@@ -6,7 +6,7 @@ import me.danjono.inventoryrollback.InventoryRollback;
 import me.danjono.inventoryrollback.config.ConfigData;
 import me.danjono.inventoryrollback.config.MessageData;
 import me.danjono.inventoryrollback.gui.menu.MainMenu;
-import me.danjono.inventoryrollback.gui.menu.PlayerMenu;
+import me.danjono.inventoryrollback.gui.menu.ModalityMenu;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;
@@ -94,10 +94,8 @@ public class RestoreSubCmd extends IRPCommand {
     }
 
     private void openPlayerMenu(Player staff, OfflinePlayer offlinePlayer) {
-        PlayerMenu menu = new PlayerMenu(staff, offlinePlayer);
-
+        ModalityMenu menu = new ModalityMenu(staff, offlinePlayer);
         staff.openInventory(menu.getInventory());
-        Bukkit.getScheduler().runTaskAsynchronously(InventoryRollback.getInstance(), menu::getPlayerMenu);
     }
 
 }

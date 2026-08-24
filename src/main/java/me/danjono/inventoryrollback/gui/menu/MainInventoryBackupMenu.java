@@ -70,7 +70,10 @@ public class MainInventoryBackupMenu {
 	    WorldGroupPolicy.registerBackupInventory(inventory, location == null ? null : location.split(",", 2)[0]);
 	    
 	    //Add back button
-        inventory.setItem(45, buttons.inventoryMenuBackButton(MessageData.getBackButton(), logType, timestamp));
+        String world = location == null ? null : location.split(",", 2)[0];
+        inventory.setItem(45, WorldGroupPolicy.tagGroup(
+                buttons.inventoryMenuBackButton(MessageData.getBackButton(), logType, timestamp),
+                WorldGroupPolicy.groupOfWorld(world)));
 
 		// Add get shulker button
 		if (main.getVersion().greaterOrEqThan(MCVersion.v1_11.toBukkitVersion()))

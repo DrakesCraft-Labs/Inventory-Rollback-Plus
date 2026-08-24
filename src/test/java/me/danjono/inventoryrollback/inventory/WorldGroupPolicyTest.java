@@ -28,4 +28,10 @@ class WorldGroupPolicyTest {
         assertEquals("unknown", WorldGroupPolicy.builtInGroupOf(null));
         assertEquals("unknown", WorldGroupPolicy.builtInGroupOf("  "));
     }
+
+    @Test
+    void exposesEveryRestoreModalityInStableOrder() {
+        assertEquals(java.util.Arrays.asList("survival", "laboratorio", "clasico", "skyblock", "oneblock"),
+                WorldGroupPolicy.knownGroups());
+    }
 }

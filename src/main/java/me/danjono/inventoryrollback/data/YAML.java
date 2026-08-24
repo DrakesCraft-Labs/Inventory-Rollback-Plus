@@ -6,6 +6,7 @@ import me.danjono.inventoryrollback.config.MessageData;
 import me.danjono.inventoryrollback.gui.InventoryName;
 import me.danjono.inventoryrollback.inventory.RestoreInventory;
 import me.danjono.inventoryrollback.inventory.SaveInventory;
+import me.danjono.inventoryrollback.inventory.WorldGroupPolicy;
 import org.apache.commons.lang3.StringUtils;
 import org.bukkit.ChatColor;
 import org.bukkit.configuration.InvalidConfigurationException;
@@ -126,6 +127,25 @@ public class YAML {
     }
 
     public List<Long> getSelectedPageTimestamps(int pageNumber) {
+        List<Long> allTimeStamps = getAllTimestamps();
+
+        //Number of backups that will be on the page
+        int backups = InventoryName.ROLLBACK_LIST.getSize() - 9;
+
+        //Return all timestamps if list is the same size or less than the page max size
+        if (allTimeStamps.size() <= backups)
+            return allTimeStamps;
+
+        List<Long> requiredTimestamps = new ArrayList<>();
+        for (int i = (backups * (pageNumber - 1)); i < ((backups * (pageNumber - 1)) + backups); i++) {
+            if (i < allTimeStamps.size()) requiredTimestamps.add(allTimeStamps.get(i));
+            else break;
+        }
+        return requiredTimestamps;
+    }
+
+    /** Returns every stable backup timestamp, newest first, for modality-aware filtering. */
+    public List<Long> getAllTimestamps() {
         List<Long> allTimeStamps = new ArrayList<>();
 
         if (!playerBackupFolder.exists())
@@ -150,24 +170,18 @@ public class YAML {
 
         //Set timestamps in order
         Collections.sort(allTimeStamps, Collections.reverseOrder());
+        return allTimeStamps;
+    }
 
-        //Number of backups that will be on the page
-        int backups = InventoryName.ROLLBACK_LIST.getSize() - 9;
-
-        //Return all timestamps if list is the same size or less than the page max size
-        if (allTimeStamps.size() <= backups)
-            return allTimeStamps;
-
-        List<Long> requiredTimestamps = new ArrayList<>();
-        for (int i = (backups * (pageNumber - 1)); i < ((backups * (pageNumber - 1)) + backups); i++) {            
-            if (i < allTimeStamps.size()) {
-                requiredTimestamps.add(allTimeStamps.get(i));
-            } else {
-                break;
-            }
+    /** Filters locally in one pass, avoiding repeated construction of full backup objects. */
+    public List<Long> getTimestampsForGroup(String group) {
+        List<Long> filtered = new ArrayList<>();
+        for (Long candidate : getAllTimestamps()) {
+            File candidateFile = new File(playerBackupFolder, candidate + ".yml");
+            String candidateWorld = YamlConfiguration.loadConfiguration(candidateFile).getString("location.world");
+            if (group.equals(WorldGroupPolicy.groupOfWorld(candidateWorld))) filtered.add(candidate);
         }
-
-        return requiredTimestamps;
+        return filtered;
     }
 
     public void purgeExcessSaves(int deleteAmount) {

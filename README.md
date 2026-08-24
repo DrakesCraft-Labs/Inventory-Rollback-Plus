@@ -23,6 +23,16 @@ group. The default rules isolate Laboratory, Classic, SkyBlock and OneBlock whil
 addon dimensions as Survival. Exceptional cross-group recovery requires the explicit
 `inventoryrollbackplus.restore.cross-group` permission; it is never inherited by ordinary staff.
 
+The restore workflow is intentionally modality-first:
+`player -> modality -> event type -> backup`. `/irp restore <player>` first offers Survival,
+Laboratory, Classic, SkyBlock and OneBlock; the following Death, Join, Quit, World Change and
+Force Save menus show only backups recorded inside the selected modality.
+
+Every world transition records the source inventory before the player leaves. Cross-modality
+travel adds a configurable five-second safety window: the player must remain still while IRP
+creates the source snapshot, then the original teleport resumes. Movement cancels the transfer
+without changing the live inventory.
+
 *Note: This plugin is a fork (extended version) of InventoryRollback but with more features and faster updates.*
 
 **Why should you I use this version?**

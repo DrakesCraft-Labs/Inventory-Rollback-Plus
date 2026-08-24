@@ -16,18 +16,21 @@ import me.danjono.inventoryrollback.data.LogType;
 import me.danjono.inventoryrollback.data.PlayerData;
 import me.danjono.inventoryrollback.gui.Buttons;
 import me.danjono.inventoryrollback.gui.InventoryName;
+import me.danjono.inventoryrollback.inventory.WorldGroupPolicy;
 
 public class PlayerMenu {
 
     private Player staff;
     private OfflinePlayer offlinePlayer;
+    private String worldGroup;
 
     private Buttons buttons;
     private Inventory inventory;
 
-    public PlayerMenu(Player staff, OfflinePlayer player) {
+    public PlayerMenu(Player staff, OfflinePlayer player, String worldGroup) {
         this.staff = staff;
         this.offlinePlayer = player;
+        this.worldGroup = worldGroup;
         this.buttons = new Buttons(player.getUniqueId());
 
         createInventory();
@@ -36,11 +39,11 @@ public class PlayerMenu {
     public void createInventory() {
         inventory = Bukkit.createInventory(staff, InventoryName.PLAYER_MENU.getSize(), InventoryName.PLAYER_MENU.getName());
         
-        inventory.setItem(2, buttons.createDeathLogButton(LogType.DEATH, null));
-        inventory.setItem(3, buttons.createJoinLogButton(LogType.JOIN, null));
-        inventory.setItem(4, buttons.createQuitLogButton(LogType.QUIT, null));
-        inventory.setItem(5, buttons.createWorldChangeLogButton(LogType.WORLD_CHANGE, null));
-        inventory.setItem(6, buttons.createForceSaveLogButton(LogType.FORCE, null));
+        inventory.setItem(2, WorldGroupPolicy.tagGroup(buttons.createDeathLogButton(LogType.DEATH, null), worldGroup));
+        inventory.setItem(3, WorldGroupPolicy.tagGroup(buttons.createJoinLogButton(LogType.JOIN, null), worldGroup));
+        inventory.setItem(4, WorldGroupPolicy.tagGroup(buttons.createQuitLogButton(LogType.QUIT, null), worldGroup));
+        inventory.setItem(5, WorldGroupPolicy.tagGroup(buttons.createWorldChangeLogButton(LogType.WORLD_CHANGE, null), worldGroup));
+        inventory.setItem(6, WorldGroupPolicy.tagGroup(buttons.createForceSaveLogButton(LogType.FORCE, null), worldGroup));
     }
 
     public Inventory getInventory() {
@@ -72,11 +75,13 @@ public class PlayerMenu {
         PlayerData worldChangeBackup = new PlayerData(uuid, LogType.WORLD_CHANGE, null);
         PlayerData forceSaveBackup = new PlayerData(uuid, LogType.FORCE, null);
 
-        if (!joinBackup.doesBackupTypeExist()
-                && !quitBackup.doesBackupTypeExist()
-                && !deathBackup.doesBackupTypeExist()
-                && !worldChangeBackup.doesBackupTypeExist()
-                && !forceSaveBackup.doesBackupTypeExist()) {
+        int deathCount = deathBackup.getTimestampsForGroup(worldGroup).size();
+        int joinCount = joinBackup.getTimestampsForGroup(worldGroup).size();
+        int quitCount = quitBackup.getTimestampsForGroup(worldGroup).size();
+        int worldChangeCount = worldChangeBackup.getTimestampsForGroup(worldGroup).size();
+        int forceCount = forceSaveBackup.getTimestampsForGroup(worldGroup).size();
+
+        if (deathCount + joinCount + quitCount + worldChangeCount + forceCount == 0) {
 
             //No backups have been found for the player
             staff.sendMessage(MessageData.getPluginPrefix() + MessageData.getNoBackupError(offlinePlayer.getName()));
@@ -84,20 +89,20 @@ public class PlayerMenu {
         
         String backupsAvailable = " backup(s) available";
 
-        List<String> deaths = Arrays.asList(deathBackup.getAmountOfBackups() + backupsAvailable);
-        inventory.setItem(2, buttons.createDeathLogButton(LogType.DEATH, deaths));
+        List<String> deaths = Arrays.asList(deathCount + backupsAvailable);
+        inventory.setItem(2, WorldGroupPolicy.tagGroup(buttons.createDeathLogButton(LogType.DEATH, deaths), worldGroup));
         
-        List<String> joins = Arrays.asList(joinBackup.getAmountOfBackups() + backupsAvailable);
-        inventory.setItem(3, buttons.createJoinLogButton(LogType.JOIN, joins));
+        List<String> joins = Arrays.asList(joinCount + backupsAvailable);
+        inventory.setItem(3, WorldGroupPolicy.tagGroup(buttons.createJoinLogButton(LogType.JOIN, joins), worldGroup));
         
-        List<String> quits = Arrays.asList(quitBackup.getAmountOfBackups() + backupsAvailable);
-        inventory.setItem(4, buttons.createQuitLogButton(LogType.QUIT, quits));
+        List<String> quits = Arrays.asList(quitCount + backupsAvailable);
+        inventory.setItem(4, WorldGroupPolicy.tagGroup(buttons.createQuitLogButton(LogType.QUIT, quits), worldGroup));
         
-        List<String> worldChange = Arrays.asList(worldChangeBackup.getAmountOfBackups() + backupsAvailable);
-        inventory.setItem(5, buttons.createWorldChangeLogButton(LogType.WORLD_CHANGE, worldChange));
+        List<String> worldChange = Arrays.asList(worldChangeCount + backupsAvailable);
+        inventory.setItem(5, WorldGroupPolicy.tagGroup(buttons.createWorldChangeLogButton(LogType.WORLD_CHANGE, worldChange), worldGroup));
         
-        List<String> forceSaves = Arrays.asList(forceSaveBackup.getAmountOfBackups() + backupsAvailable);
-        inventory.setItem(6, buttons.createForceSaveLogButton(LogType.FORCE, forceSaves));
+        List<String> forceSaves = Arrays.asList(forceCount + backupsAvailable);
+        inventory.setItem(6, WorldGroupPolicy.tagGroup(buttons.createForceSaveLogButton(LogType.FORCE, forceSaves), worldGroup));
     }
 
 }

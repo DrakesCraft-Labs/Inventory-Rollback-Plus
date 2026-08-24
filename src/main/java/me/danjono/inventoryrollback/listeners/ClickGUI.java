@@ -55,6 +55,7 @@ public class ClickGUI implements Listener {
         String title = e.getView().getTitle();
         if (!title.equals(InventoryName.MAIN_MENU.getName()) 
                 && !title.equals(InventoryName.PLAYER_MENU.getName()) 
+                && !title.equals(InventoryName.MODALITY_MENU.getName())
                 && !title.equalsIgnoreCase(InventoryName.ROLLBACK_LIST.getName())
                 && !title.equalsIgnoreCase(InventoryName.MAIN_BACKUP.getName())
                 && !title.equalsIgnoreCase(InventoryName.ENDER_CHEST_BACKUP.getName()))
@@ -84,6 +85,7 @@ public class ClickGUI implements Listener {
         String title = e.getView().getTitle();
         if (!title.equals(InventoryName.MAIN_MENU.getName()) 
                 && !title.equals(InventoryName.PLAYER_MENU.getName()) 
+                && !title.equals(InventoryName.MODALITY_MENU.getName())
                 && !title.equalsIgnoreCase(InventoryName.ROLLBACK_LIST.getName())
                 && !title.equalsIgnoreCase(InventoryName.MAIN_BACKUP.getName())
                 && !title.equalsIgnoreCase(InventoryName.ENDER_CHEST_BACKUP.getName()))
@@ -107,6 +109,10 @@ public class ClickGUI implements Listener {
         //Listener for player menu
         else if (title.equals(InventoryName.PLAYER_MENU.getName())) {
             playerMenu(e,staff, icon);
+        }
+
+        else if (title.equals(InventoryName.MODALITY_MENU.getName())) {
+            modalityMenu(e, staff, icon);
         }
 
         //Listener for rollback list menu
@@ -148,16 +154,32 @@ public class ClickGUI implements Listener {
             //Clicked a player head
             else {
                 OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(UUID.fromString(nbt.getString("uuid")));
-                PlayerMenu menu = new PlayerMenu(staff, offlinePlayer);
-
+                ModalityMenu menu = new ModalityMenu(staff, offlinePlayer);
                 staff.openInventory(menu.getInventory());
-                Bukkit.getScheduler().runTaskAsynchronously(InventoryRollback.getInstance(), menu::getPlayerMenu);
             }
         } else {
             if (e.getRawSlot() >= e.getInventory().getSize() && !e.isShiftClick()) {
                 e.setCancelled(false);
             }
         }
+    }
+
+    private void modalityMenu(InventoryClickEvent e, Player staff, ItemStack icon) {
+        if (icon == null || e.getRawSlot() < 0 || e.getRawSlot() >= InventoryName.MODALITY_MENU.getSize()) return;
+        CustomDataItemEditor nbt = CustomDataItemEditor.editItem(icon);
+        if (!nbt.hasUUID()) return;
+        OfflinePlayer target = Bukkit.getOfflinePlayer(UUID.fromString(nbt.getString("uuid")));
+        if (e.getRawSlot() == 0) {
+            MainMenu menu = new MainMenu(staff, 1);
+            staff.openInventory(menu.getInventory());
+            Bukkit.getScheduler().runTaskAsynchronously(InventoryRollback.getInstance(), menu::getMainMenu);
+            return;
+        }
+        String worldGroup = nbt.getString(WorldGroupPolicy.GROUP_DATA_KEY);
+        if (!WorldGroupPolicy.knownGroups().contains(worldGroup)) return;
+        PlayerMenu menu = new PlayerMenu(staff, target, worldGroup);
+        staff.openInventory(menu.getInventory());
+        Bukkit.getScheduler().runTaskAsynchronously(InventoryRollback.getInstance(), menu::getPlayerMenu);
     }
 
     private void playerMenu(InventoryClickEvent e, Player staff, ItemStack icon) {
@@ -174,13 +196,12 @@ public class ClickGUI implements Listener {
 
             //Clicked player head
             if (e.getRawSlot() == 0) {
-                MainMenu menu = new MainMenu(staff, 1);
-
+                ModalityMenu menu = new ModalityMenu(staff, offlinePlayer);
                 staff.openInventory(menu.getInventory());
-                Bukkit.getScheduler().runTaskAsynchronously(InventoryRollback.getInstance(), menu::getMainMenu);
             } else {
                 LogType logType = LogType.valueOf(nbt.getString("logType"));
-                RollbackListMenu menu = new RollbackListMenu(staff, offlinePlayer, logType, 1);
+                String worldGroup = nbt.getString(WorldGroupPolicy.GROUP_DATA_KEY);
+                RollbackListMenu menu = new RollbackListMenu(staff, offlinePlayer, logType, worldGroup, 1);
 
                 staff.openInventory(menu.getInventory());
                 Bukkit.getScheduler().runTaskAsynchronously(InventoryRollback.getInstance(), menu::showBackups);
@@ -250,13 +271,15 @@ public class ClickGUI implements Listener {
                 //Selected to go back to main menu
                 OfflinePlayer player = Bukkit.getOfflinePlayer(UUID.fromString(nbt.getString("uuid")));
                 if (page == 0) {
-                    PlayerMenu menu = new PlayerMenu(staff, player);
+                    String worldGroup = nbt.getString(WorldGroupPolicy.GROUP_DATA_KEY);
+                    PlayerMenu menu = new PlayerMenu(staff, player, worldGroup);
 
                     staff.openInventory(menu.getInventory());
                     Bukkit.getScheduler().runTaskAsynchronously(InventoryRollback.getInstance(), menu::getPlayerMenu);
                 } else {
                     LogType logType = LogType.valueOf(nbt.getString("logType"));
-                    RollbackListMenu menu = new RollbackListMenu(staff, player, logType, page);
+                    String worldGroup = nbt.getString(WorldGroupPolicy.GROUP_DATA_KEY);
+                    RollbackListMenu menu = new RollbackListMenu(staff, player, logType, worldGroup, page);
 
                     staff.openInventory(menu.getInventory());
                     Bukkit.getScheduler().runTaskAsynchronously(InventoryRollback.getInstance(), menu::showBackups);
@@ -284,7 +307,8 @@ public class ClickGUI implements Listener {
 
             //Click on page selector button to go back to rollback menu
             if (icon.getType().equals(Buttons.getPageSelectorIcon())) {
-                RollbackListMenu menu = new RollbackListMenu(staff, offlinePlayer, logType, 1);
+                String worldGroup = nbt.getString(WorldGroupPolicy.GROUP_DATA_KEY);
+                RollbackListMenu menu = new RollbackListMenu(staff, offlinePlayer, logType, worldGroup, 1);
 
                 staff.openInventory(menu.getInventory());
                 Bukkit.getScheduler().runTaskAsynchronously(InventoryRollback.getInstance(), menu::showBackups);

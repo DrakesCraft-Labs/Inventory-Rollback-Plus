@@ -108,6 +108,21 @@ public class PlayerData {
         return timeStamps;
     }
 
+    /** Filters backups by their saved modality before GUI pagination is applied. */
+    public List<Long> getTimestampsForGroup(String group) {
+        if (ConfigData.getSaveType() == SaveType.YAML) {
+            return yaml.getTimestampsForGroup(group);
+        } else if (ConfigData.getSaveType() == SaveType.MYSQL) {
+            try {
+                return mysql.getTimestampsForGroup(group);
+            } catch (SQLException error) {
+                error.printStackTrace();
+                return new ArrayList<>();
+            }
+        }
+        return new ArrayList<>();
+    }
+
     public CompletableFuture<Void> purgeExcessSaves(boolean shouldSaveAsync) {
 
         CompletableFuture<Void> future = new CompletableFuture<>();

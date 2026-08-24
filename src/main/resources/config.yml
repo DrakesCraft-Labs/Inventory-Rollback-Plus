@@ -93,6 +93,10 @@ world-group-safety:
     oneblock:
       - '^oneblock_world(?:_.*)?$'
 
+## Cross-modality travel pauses before teleporting so the source inventory is saved first.
+world-transfer-safety:
+  delay-seconds: 5
+
 ## Change this to 'false' to ignore saving if the player's inventory is empty
 save-empty-inventories: true
       

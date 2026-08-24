@@ -57,14 +57,16 @@ public class EnderChestBackupMenu {
         List<String> lore = new ArrayList<>();
         if (pageNumber == 1) {
             ItemStack mainInventoryMenu = buttons.inventoryMenuBackButton(MessageData.getBackButton(), logType, timestamp);
-            inventory.setItem(InventoryName.ENDER_CHEST_BACKUP.getSize() - 8, mainInventoryMenu);
+            inventory.setItem(InventoryName.ENDER_CHEST_BACKUP.getSize() - 8,
+                    WorldGroupPolicy.tagGroup(mainInventoryMenu, WorldGroupPolicy.groupOfWorld(backupWorld)));
         }
 
         if (pageNumber > 1) {
             lore.add("Page " + (pageNumber - 1));
             ItemStack previousPage = buttons.enderChestBackButton(MessageData.getPreviousPageButton(), logType, pageNumber - 1, timestamp, lore);
 
-            inventory.setItem(InventoryName.ENDER_CHEST_BACKUP.getSize() - 8, previousPage);
+            inventory.setItem(InventoryName.ENDER_CHEST_BACKUP.getSize() - 8,
+                    WorldGroupPolicy.tagGroup(previousPage, WorldGroupPolicy.groupOfWorld(backupWorld)));
         }
     }
 
@@ -141,7 +143,8 @@ public class EnderChestBackupMenu {
             lore.add("Page " + (pageNumber + 1));
             ItemStack nextPage = buttons.enderChestNextButton(MessageData.getNextPageButton(), logType, pageNumber + 1, timestamp, lore);
 
-            inventory.setItem(InventoryName.ENDER_CHEST_BACKUP.getSize() - 2, nextPage);
+            inventory.setItem(InventoryName.ENDER_CHEST_BACKUP.getSize() - 2,
+                    WorldGroupPolicy.tagGroup(nextPage, WorldGroupPolicy.groupOfWorld(backupWorld)));
             lore.clear();
         }
     }
