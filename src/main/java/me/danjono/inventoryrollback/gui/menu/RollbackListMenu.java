@@ -35,7 +35,7 @@ public class RollbackListMenu {
         this.playerUUID = player.getUniqueId();
         this.logType = logType;
         this.worldGroup = worldGroup;
-        this.pageNumber = pageNumberIn;
+        this.pageNumber = Math.max(1, pageNumberIn);
         this.buttons = new Buttons(playerUUID);
         
         createInventory();
@@ -68,6 +68,9 @@ public class RollbackListMenu {
 
         //Check how many backups there are in total
         List<Long> groupTimestamps = playerData.getTimestampsForGroup(worldGroup);
+        if (groupTimestamps == null) {
+            groupTimestamps = new ArrayList<>();
+        }
         int backups = groupTimestamps.size();
 
         //How many rows are required
@@ -75,18 +78,22 @@ public class RollbackListMenu {
 
         //How many pages are required
         int pagesRequired = (int) Math.ceil(backups / (double) spaceRequired);
+        if (pagesRequired <= 0) {
+            pagesRequired = 1;
+        }
 
         //Check if pageNumber supplied is greater than pagesRequired, if true set to last page
         if (pageNumber > pagesRequired) {
             pageNumber = pagesRequired;
-        } else if (pageNumber <= 0) {
+        }
+        if (pageNumber < 1) {
             pageNumber = 1;
         }
 
-        int backupsAlreadyPassed = spaceRequired * (pageNumber - 1);
-        int backupsOnCurrentPage = Math.min(backups, Math.min(spaceRequired, backups - backupsAlreadyPassed));
-        int fromIndex = Math.min(backupsAlreadyPassed, groupTimestamps.size());
-        int toIndex = Math.min(fromIndex + spaceRequired, groupTimestamps.size());
+        int backupsAlreadyPassed = Math.max(0, spaceRequired * (pageNumber - 1));
+        int backupsOnCurrentPage = Math.max(0, Math.min(backups, Math.min(spaceRequired, backups - backupsAlreadyPassed)));
+        int fromIndex = Math.max(0, Math.min(backupsAlreadyPassed, groupTimestamps.size()));
+        int toIndex = Math.max(fromIndex, Math.min(fromIndex + spaceRequired, groupTimestamps.size()));
         List<Long> timeStamps = groupTimestamps.subList(fromIndex, toIndex);
 
         int position = 0;

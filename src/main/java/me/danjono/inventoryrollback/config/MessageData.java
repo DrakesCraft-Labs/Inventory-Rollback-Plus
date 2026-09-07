@@ -225,6 +225,12 @@ public class MessageData {
     private static String nameVariable = "%NAME%";
     private static String xpVariable = "%XP%";
 
+    private static String replaceName(String message, String name) {
+        if (message == null) return "";
+        String safeName = (name != null && !name.isEmpty()) ? name : "Desconocido";
+        return message.replaceAll(nameVariable, safeName);
+    }
+
     public static void setPluginPrefix(String message) {
         pluginPrefix = message;
     }
@@ -514,15 +520,15 @@ public class MessageData {
     }
 
     public static String getNoBackupError(String name) {
-        return noBackup.replaceAll(nameVariable, name);
+        return replaceName(noBackup, name);
     }
 
     public static String getNotOnlineError(String name) {
-        return notOnline.replaceAll(nameVariable, name);
+        return replaceName(notOnline, name);
     }
 
     public static String getForceBackupPlayer(String name) {
-        return forceSavedPlayer.replaceAll(nameVariable, name);
+        return replaceName(forceSavedPlayer, name);
     }
 
     public static String getForceBackupAll() {
@@ -530,19 +536,19 @@ public class MessageData {
     }
 
     public static String getForceBackupError(String name) {
-        return notForcedSaved.replaceAll(nameVariable, name);
+        return replaceName(notForcedSaved, name);
     }
 
     public static String getMainInventoryRestored(String name) {
-        return mainInventoryRestored.replaceAll(nameVariable, name);
+        return replaceName(mainInventoryRestored, name);
     }
 
     public static String getMainInventoryRestoredPlayer(String name) {
-        return mainInventoryRestoredPlayer.replaceAll(nameVariable, name);
+        return replaceName(mainInventoryRestoredPlayer, name);
     }
 
     public static String getMainInventoryNotOnline(String name) {
-        return mainInventoryNotOnline.replaceAll(nameVariable, name);
+        return replaceName(mainInventoryNotOnline, name);
     }
 
     public static String getMainInventoryRestoreButton() {
@@ -554,15 +560,15 @@ public class MessageData {
     }
 
     public static String getEnderChestRestored(String name) {
-        return enderChestRestored.replaceAll(nameVariable, name);
+        return replaceName(enderChestRestored, name);
     }
 
     public static String getEnderChestRestoredPlayer(String name) {
-        return enderChestRestoredPlayer.replaceAll(nameVariable, name);
+        return replaceName(enderChestRestoredPlayer, name);
     }
 
     public static String getEnderChestNotOnline(String name) {
-        return enderChestNotOnline.replaceAll(nameVariable, name);
+        return replaceName(enderChestNotOnline, name);
     }
 
     public static String getEnderChestRestoreButton() {
@@ -570,15 +576,15 @@ public class MessageData {
     }
 
     public static String getHealthRestored(String name) {
-        return healthRestored.replaceAll(nameVariable, name);
+        return replaceName(healthRestored, name);
     }
 
     public static String getHealthRestoredPlayer(String name) {
-        return healthRestoredPlayer.replaceAll(nameVariable, name);
+        return replaceName(healthRestoredPlayer, name);
     }
 
     public static String getHealthNotOnline(String name) {
-        return healthNotOnline.replaceAll(nameVariable, name);
+        return replaceName(healthNotOnline, name);
     }
 
     public static String getHealthRestoreButton() {
@@ -586,15 +592,15 @@ public class MessageData {
     }
 
     public static String getHungerRestored(String name) {
-        return hungerRestored.replaceAll(nameVariable, name);
+        return replaceName(hungerRestored, name);
     }
 
     public static String getHungerRestoredPlayer(String name) {
-        return hungerRestoredPlayer.replaceAll(nameVariable, name);
+        return replaceName(hungerRestoredPlayer, name);
     }
 
     public static String getHungerNotOnline(String name) {
-        return hungerNotOnline.replaceAll(nameVariable, name);
+        return replaceName(hungerNotOnline, name);
     }
 
     public static String getHungerRestoreButton() {
@@ -602,15 +608,15 @@ public class MessageData {
     }
 
     public static String getExperienceRestored(String name, int xp) {
-        return experienceRestored.replaceAll(nameVariable, name).replaceAll(xpVariable, xp + "");
+        return replaceName(experienceRestored, name).replaceAll(xpVariable, xp + "");
     }
 
     public static String getExperienceRestoredPlayer(String name, int xp) {
-        return experienceRestoredPlayer.replaceAll(nameVariable, name).replaceAll(xpVariable, xp + "");
+        return replaceName(experienceRestoredPlayer, name).replaceAll(xpVariable, xp + "");
     }
 
     public static String getExperienceNotOnlinePlayer(String name) {
-        return experienceNotOnline.replaceAll(nameVariable, name);
+        return replaceName(experienceNotOnline, name);
     }
 
     public static String getExperienceRestoreButton() {

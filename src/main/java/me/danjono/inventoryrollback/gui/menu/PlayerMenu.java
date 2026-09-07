@@ -84,7 +84,11 @@ public class PlayerMenu {
         if (deathCount + joinCount + quitCount + worldChangeCount + forceCount == 0) {
 
             //No backups have been found for the player
-            staff.sendMessage(MessageData.getPluginPrefix() + MessageData.getNoBackupError(offlinePlayer.getName()));
+            String targetName = offlinePlayer.getName();
+            if (targetName == null || targetName.isEmpty()) {
+                targetName = uuid.toString();
+            }
+            staff.sendMessage(MessageData.getPluginPrefix() + MessageData.getNoBackupError(targetName));
         }
         
         String backupsAvailable = " backup(s) available";
