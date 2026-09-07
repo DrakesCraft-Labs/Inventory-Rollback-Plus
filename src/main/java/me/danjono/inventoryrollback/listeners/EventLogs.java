@@ -84,6 +84,10 @@ public class EventLogs implements Listener {
 		if (player.hasPermission("inventoryrollbackplus.adminalerts")) {
 			// can send info to admins here
 		}
+
+		if (this.main != null && this.main.getPendingRestoreManager() != null) {
+			this.main.getPendingRestoreManager().checkAndApply(player);
+		}
 	}
 
 	@EventHandler
@@ -345,6 +349,10 @@ public class EventLogs implements Listener {
 		if (player.hasPermission("inventoryrollbackplus.worldchangesave")) {
 			new SaveInventory(e.getPlayer(), LogType.WORLD_CHANGE, null, null)
 					.snapshotAndSave(player.getInventory(), player.getEnderChest(), true);
+		}
+
+		if (this.main != null && this.main.getPendingRestoreManager() != null) {
+			this.main.getPendingRestoreManager().checkAndApply(player);
 		}
 	}
 

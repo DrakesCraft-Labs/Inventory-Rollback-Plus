@@ -87,11 +87,11 @@ public class YAML {
             forceSavesFolder.mkdir();
     }
 
-    private static File getRootBackupsFolder() {
+    public static File getRootBackupsFolder() {
         return new File(ConfigData.getFolderLocation(), backupFolderName);
     }
 
-    private static File getBackupFolderForLogType(LogType backupLogType) {
+    public static File getBackupFolderForLogType(LogType backupLogType) {
         File backupLocation = getRootBackupsFolder();
 
         if (backupLogType == LogType.JOIN) {
@@ -109,7 +109,7 @@ public class YAML {
         return backupLocation;
     }
 
-    private static File getPlayerBackupLocation(LogType backupLogType, UUID playerUUID) {
+    public static File getPlayerBackupLocation(LogType backupLogType, UUID playerUUID) {
         return new File(getBackupFolderForLogType(backupLogType), playerUUID.toString());
     }
 

@@ -2,6 +2,7 @@ package com.nuclyon.technicallycoded.inventoryrollback;
 
 import com.nuclyon.technicallycoded.inventoryrollback.UpdateChecker.UpdateResult;
 import com.nuclyon.technicallycoded.inventoryrollback.commands.Commands;
+import com.nuclyon.technicallycoded.inventoryrollback.restore.PendingRestoreManager;
 import com.nuclyon.technicallycoded.inventoryrollback.util.TimeZoneUtil;
 import com.nuclyon.technicallycoded.inventoryrollback.util.test.SelfTestSerialization;
 import com.tcoded.lightlibs.bukkitversion.BukkitVersion;
@@ -32,6 +33,7 @@ public class InventoryRollbackPlus extends InventoryRollback {
     private static InventoryRollbackPlus instancePlus;
 
     private TimeZoneUtil timeZoneUtil = null;
+    private PendingRestoreManager pendingRestoreManager = null;
 
     private ConfigData configData;
     private BukkitVersion version = BukkitVersion.v1_13_R1;
@@ -40,6 +42,10 @@ public class InventoryRollbackPlus extends InventoryRollback {
 
     public static InventoryRollbackPlus getInstance() {
         return instancePlus;
+    }
+
+    public PendingRestoreManager getPendingRestoreManager() {
+        return pendingRestoreManager;
     }
 
     @Override
@@ -75,6 +81,9 @@ public class InventoryRollbackPlus extends InventoryRollback {
         // Storage Init & Update checker
         super.startupTasks();
 
+        // Pending restores manager for offline player restoration queue
+        this.pendingRestoreManager = new PendingRestoreManager(new File(getDataFolder(), "pending_restores.yml"));
+
         // bStats
         if (ConfigData.isbStatsEnabled()) initBStats();
 
@@ -109,6 +118,10 @@ public class InventoryRollbackPlus extends InventoryRollback {
         // Signal to the plugin that new tasks cannot be scheduled
         getLogger().info("Setting shutdown state");
         shuttingDown.set(true);
+
+        if (pendingRestoreManager != null) {
+            pendingRestoreManager.save();
+        }
 
         // Save all inventories
         getLogger().info("Saving player inventories...");

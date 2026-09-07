@@ -1,6 +1,7 @@
 package me.danjono.inventoryrollback.inventory;
 
 import me.danjono.inventoryrollback.InventoryRollback;
+import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
@@ -26,19 +27,25 @@ public final class WorldGroupPolicy {
     private WorldGroupPolicy() {}
 
     public static boolean mayRestore(Player staff, Player target, String backupWorld) {
+        return mayRestore((CommandSender) staff, target, backupWorld);
+    }
+
+    public static boolean mayRestore(CommandSender staff, Player target, String backupWorld) {
         if (!InventoryRollback.getInstance().getConfig().getBoolean("world-group-safety.enabled", true)) return true;
-        if (InventoryRollback.getInstance().getConfig().getBoolean("world-group-safety.allow-permission-bypass", false)
-                && staff.hasPermission(BYPASS_PERMISSION)) return true;
+        if (staff != null && (!(staff instanceof Player) || (InventoryRollback.getInstance().getConfig().getBoolean("world-group-safety.allow-permission-bypass", false)
+                && staff.hasPermission(BYPASS_PERMISSION)))) return true;
         String currentWorld = target.getWorld().getName();
         String backupGroup = groupOf(backupWorld,
                 InventoryRollback.getInstance().getConfig().getConfigurationSection("world-group-safety.groups"));
         String currentGroup = groupOf(currentWorld,
                 InventoryRollback.getInstance().getConfig().getConfigurationSection("world-group-safety.groups"));
         if (backupGroup.equals(currentGroup)) return true;
-        staff.sendMessage("§c[InventoryRollbackPlus] Restore blocked: backup belongs to §e" + backupGroup
-                + "§c but the player is currently in §e" + currentGroup + "§c.");
-        staff.sendMessage("§7Move the player to the matching modality first. Cross-modality restore requires §f"
-                + BYPASS_PERMISSION + "§7.");
+        if (staff != null) {
+            staff.sendMessage("§c[InventoryRollbackPlus] Restore blocked: backup belongs to §e" + backupGroup
+                    + "§c but the player is currently in §e" + currentGroup + "§c.");
+            staff.sendMessage("§7Move the player to the matching modality first. Cross-modality restore requires §f"
+                    + BYPASS_PERMISSION + "§7 or --force.");
+        }
         return false;
     }
 
@@ -67,8 +74,11 @@ public final class WorldGroupPolicy {
 
     /** Resolves a world using custom rules first and built-in safe defaults second. */
     public static String groupOfWorld(String world) {
-        return groupOf(world,
-                InventoryRollback.getInstance().getConfig().getConfigurationSection("world-group-safety.groups"));
+        ConfigurationSection groups = null;
+        if (InventoryRollback.getInstance() != null && InventoryRollback.getInstance().getConfig() != null) {
+            groups = InventoryRollback.getInstance().getConfig().getConfigurationSection("world-group-safety.groups");
+        }
+        return groupOf(world, groups);
     }
 
     /** Resolves ordered regex rules; unmatched normal worlds remain in the configured fallback group. */
@@ -83,16 +93,21 @@ public final class WorldGroupPolicy {
                             return group.toLowerCase(Locale.ROOT);
                         }
                     } catch (PatternSyntaxException error) {
-                        InventoryRollback.getInstance().getLogger().warning(
-                                "Invalid world-group-safety regex '" + expression + "': " + error.getMessage());
+                        if (InventoryRollback.getInstance() != null) {
+                            InventoryRollback.getInstance().getLogger().warning(
+                                    "Invalid world-group-safety regex '" + expression + "': " + error.getMessage());
+                        }
                     }
                 }
             }
         }
         String builtInGroup = builtInGroupOf(world);
         if (builtInGroup != null) return builtInGroup;
-        return InventoryRollback.getInstance().getConfig().getString("world-group-safety.fallback-group", "survival")
-                .toLowerCase(Locale.ROOT);
+        String fallback = "survival";
+        if (InventoryRollback.getInstance() != null && InventoryRollback.getInstance().getConfig() != null) {
+            fallback = InventoryRollback.getInstance().getConfig().getString("world-group-safety.fallback-group", "survival");
+        }
+        return fallback.toLowerCase(Locale.ROOT);
     }
 
     /** Safe defaults keep old production configs protected before administrators add custom rules. */

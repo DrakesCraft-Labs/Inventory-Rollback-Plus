@@ -77,6 +77,28 @@ public class Commands implements CommandExecutor, TabCompleter {
             ) {
                 opts = this.importOptions;
 
+            } else if (args[0].equalsIgnoreCase("restore") &&
+                    (commandSender.hasPermission("inventoryrollbackplus.restore") ||
+                     commandSender.hasPermission("inventoryrollbackplus.viewbackups"))
+            ) {
+                ArrayList<String> suggestions = new ArrayList<>();
+                suggestions.add("pending");
+                suggestions.add("list-pending");
+                suggestions.add("cancel-pending");
+                try {
+                    for (org.bukkit.entity.Player p : org.bukkit.Bukkit.getOnlinePlayers()) {
+                        if (p.getName().toLowerCase().startsWith(args[1].toLowerCase())) {
+                            suggestions.add(p.getName());
+                        }
+                    }
+                } catch (Throwable ignored) {}
+                for (String option : new String[]{"pending", "list-pending", "cancel-pending"}) {
+                    if (!suggestions.contains(option) && option.startsWith(args[1].toLowerCase())) {
+                        suggestions.add(option);
+                    }
+                }
+                return suggestions;
+
             } else {
                 opts = null;
             }
@@ -87,6 +109,22 @@ public class Commands implements CommandExecutor, TabCompleter {
             for (String option : opts) {
                 if (option.startsWith(args[1].toLowerCase()))
                     suggestions.add(option);
+            }
+            return suggestions;
+        } else if (args.length == 3 && args[0].equalsIgnoreCase("restore")) {
+            ArrayList<String> suggestions = new ArrayList<>();
+            for (String s : new String[]{"list", "latest", "1", "10m", "30m", "--ender", "--force"}) {
+                if (s.startsWith(args[2].toLowerCase())) {
+                    suggestions.add(s);
+                }
+            }
+            return suggestions;
+        } else if (args.length >= 4 && args[0].equalsIgnoreCase("restore")) {
+            ArrayList<String> suggestions = new ArrayList<>();
+            for (String s : new String[]{"--ender", "--force"}) {
+                if (s.startsWith(args[args.length - 1].toLowerCase())) {
+                    suggestions.add(s);
+                }
             }
             return suggestions;
         }
