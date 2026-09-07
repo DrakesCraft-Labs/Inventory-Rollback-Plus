@@ -187,8 +187,49 @@ public class PendingRestoreManager {
     }
 
     /**
+     * Decide si la copia puede aplicarse en el grupo donde esta el jugador ahora mismo.
+     * Extraido como funcion pura para poder probar el contrato de modalidad sin un servidor.
+     */
+    public static boolean canApplyInGroup(String currentGroup, String targetGroup, boolean force) {
+        if (force) return true;
+        if (targetGroup == null || "unknown".equalsIgnoreCase(targetGroup)) return true;
+        return targetGroup.equalsIgnoreCase(currentGroup);
+    }
+
+    /**
+     * Programa la comprobacion para el tick SIGUIENTE al evento (#349).
+     * BentoBox/InvSwitcher inyecta el inventario de la modalidad dentro del propio
+     * PlayerChangedWorldEvent; aplicar en el mismo tick hace que su escritura pise
+     * la restauracion y el jugador se quede sin sus items.
+     */
+    public void scheduleCheckAndApply(final Player player) {
+        if (player == null) return;
+
+        InventoryRollbackPlus plugin = InventoryRollbackPlus.getInstance();
+        if (plugin == null) {
+            checkAndApply(player);
+            return;
+        }
+
+        try {
+            Bukkit.getScheduler().runTask(plugin, new Runnable() {
+                @Override
+                public void run() {
+                    // El jugador pudo desconectar o volver a cambiar de mundo en ese tick.
+                    if (!player.isOnline()) return;
+                    checkAndApply(player);
+                }
+            });
+        } catch (Throwable error) {
+            // Sin scheduler disponible (apagado o entorno de pruebas) se aplica en linea.
+            checkAndApply(player);
+        }
+    }
+
+    /**
      * Checks if player has a pending restore and applies it if they are in the target modality or force is true.
      * Must be called on Bukkit thread when player joins or changes worlds.
+     * Prefiere {@link #scheduleCheckAndApply(Player)} desde un listener de mundo.
      */
     public boolean checkAndApply(Player player) {
         if (player == null) return false;
@@ -198,9 +239,7 @@ public class PendingRestoreManager {
         String currentWorld = player.getWorld().getName();
         String currentGroup = WorldGroupPolicy.groupOfWorld(currentWorld);
 
-        boolean canApply = pending.isForce()
-                || "unknown".equalsIgnoreCase(pending.getTargetGroup())
-                || currentGroup.equalsIgnoreCase(pending.getTargetGroup());
+        boolean canApply = canApplyInGroup(currentGroup, pending.getTargetGroup(), pending.isForce());
 
         if (!canApply) {
             player.sendMessage("§8[§d§lSAORI§8] §eTienes una restauración de inventario pendiente para la modalidad §b"

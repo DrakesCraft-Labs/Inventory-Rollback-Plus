@@ -75,7 +75,9 @@ required for their role.
 
 | Command | Purpose |
 | --- | --- |
-| `/irp restore <player>` | Open the modality-aware backup browser. |
+| `/irp restore <player>` | Open the modality-aware backup browser (numbered list when run from the console). |
+| `/irp restore <player> <list\|latest\|#\|Xm> [--ender] [--force]` | Console/RCON restore without a GUI. Requires `inventoryrollbackplus.restore`. |
+| `/irp restore pending` / `cancel-pending <player>` | Inspect or drop queued offline restores. |
 | `/irp forcebackup <player>` | Create a manual player backup. |
 | `/irp enable` | Enable backup processing. |
 | `/irp disable` | Disable backup processing. |
@@ -91,10 +93,10 @@ compatibility.
 
 | Permission | Default | Purpose |
 | --- | --- | --- |
-| `inventoryrollbackplus.viewbackups` | OP | Browse backups without restoring them. |
-| `inventoryrollbackplus.restore` | OP | Restore inventory data from the recovery GUI. |
+| `inventoryrollbackplus.viewbackups` | OP | Browse backups without restoring them. Read-only in the GUI **and** in the console command: it cannot restore, queue an offline restore or cancel one. |
+| `inventoryrollbackplus.restore` | OP | Restore inventory data from the recovery GUI or the CLI. Required for every mutating action. |
 | `inventoryrollbackplus.restore.teleport` | OP | Teleport to a saved backup location. |
-| `inventoryrollbackplus.restore.cross-group` | OP | Bypass modality isolation for an exceptional recovery. |
+| `inventoryrollbackplus.restore.cross-group` | `false` | Bypass modality isolation for an exceptional recovery. Also required to use the `--force` flag. |
 | `inventoryrollbackplus.forcebackup` | OP | Create a manual backup. |
 | `inventoryrollbackplus.enable` | OP | Enable backup processing. |
 | `inventoryrollbackplus.disable` | OP | Disable backup processing. |

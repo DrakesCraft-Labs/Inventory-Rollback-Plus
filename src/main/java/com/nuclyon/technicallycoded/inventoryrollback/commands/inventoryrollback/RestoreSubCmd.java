@@ -30,17 +30,35 @@ import java.util.UUID;
 
 public class RestoreSubCmd extends IRPCommand {
 
+    /** Solo lectura: listar respaldos y abrir menus. Declarado en plugin.yml como "can't ... restore". */
+    public static final String PERM_VIEW = "inventoryrollbackplus.viewbackups";
+    /** Mutacion: aplicar restauraciones, encolarlas o cancelarlas. */
+    public static final String PERM_RESTORE = "inventoryrollbackplus.restore";
+
     public RestoreSubCmd(InventoryRollbackPlus mainIn) {
         super(mainIn);
     }
 
+    /** Entrada al comando: basta con poder mirar. La consola siempre pasa. */
+    public static boolean mayView(boolean isPlayer, boolean hasView, boolean hasRestore) {
+        return !isPlayer || hasView || hasRestore;
+    }
+
+    /** Toda accion que altera el inventario de un jugador exige el permiso de restauracion completo. */
+    public static boolean mayMutate(boolean isPlayer, boolean hasRestore) {
+        return !isPlayer || hasRestore;
+    }
+
+    /** --force salta la barrera entre modalidades: exige el permiso de cruce explicito. */
+    public static boolean mayForce(boolean isPlayer, boolean hasCrossGroup) {
+        return !isPlayer || hasCrossGroup;
+    }
+
     @Override
     public void onCommand(CommandSender sender, Command cmd, String label, String[] args) {
-        if (sender instanceof Player) {
-            if (!sender.hasPermission("inventoryrollbackplus.viewbackups") && !sender.hasPermission("inventoryrollbackplus.restore")) {
-                sender.sendMessage(MessageData.getPluginPrefix() + MessageData.getNoPermission());
-                return;
-            }
+        if (!mayView(sender instanceof Player, sender.hasPermission(PERM_VIEW), sender.hasPermission(PERM_RESTORE))) {
+            sender.sendMessage(MessageData.getPluginPrefix() + MessageData.getNoPermission());
+            return;
         }
 
         if (!ConfigData.isEnabled()) {
@@ -119,6 +137,16 @@ public class RestoreSubCmd extends IRPCommand {
 
         if (action == null || action.equalsIgnoreCase("list")) {
             showUnifiedBackupList(sender, resolved);
+            return;
+        }
+
+        // A partir de aqui la orden MUTA el inventario del jugador: viewbackups ya no basta (#356).
+        if (!denyIfCannotMutate(sender)) return;
+
+        // --force omite la barrera entre modalidades: exige el permiso de cruce explicito (#356).
+        if (isForce && !mayForce(sender instanceof Player, sender.hasPermission(WorldGroupPolicy.BYPASS_PERMISSION))) {
+            sender.sendMessage("§c[IRP] §f--force §csalta el aislamiento entre modalidades y requiere §f"
+                    + WorldGroupPolicy.BYPASS_PERMISSION + "§c.");
             return;
         }
 
@@ -294,6 +322,8 @@ public class RestoreSubCmd extends IRPCommand {
     }
 
     private void cancelPendingRestore(CommandSender sender, String playerNameOrUuid) {
+        if (!denyIfCannotMutate(sender)) return;
+
         PendingRestoreManager pendingMgr = InventoryRollbackPlus.getInstance().getPendingRestoreManager();
         if (pendingMgr == null) return;
 
@@ -313,6 +343,15 @@ public class RestoreSubCmd extends IRPCommand {
         } else {
             sender.sendMessage("§e[IRP] No existía ninguna restauración pendiente para §f" + playerNameOrUuid);
         }
+    }
+
+    /** Devuelve true si el emisor puede mutar; si no, ya envio el mensaje de denegacion. */
+    private boolean denyIfCannotMutate(CommandSender sender) {
+        if (mayMutate(sender instanceof Player, sender.hasPermission(PERM_RESTORE))) return true;
+        sender.sendMessage(MessageData.getPluginPrefix() + MessageData.getNoPermission());
+        sender.sendMessage("§7El permiso §f" + PERM_VIEW + " §7solo permite consultar respaldos; restaurar exige §f"
+                + PERM_RESTORE + "§7.");
+        return false;
     }
 
     private void sendCliHelp(CommandSender sender) {

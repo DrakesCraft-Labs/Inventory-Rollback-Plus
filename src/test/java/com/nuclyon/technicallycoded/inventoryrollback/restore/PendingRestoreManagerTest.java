@@ -1,5 +1,6 @@
 package com.nuclyon.technicallycoded.inventoryrollback.restore;
 
+import com.nuclyon.technicallycoded.inventoryrollback.commands.inventoryrollback.RestoreSubCmd;
 import me.danjono.inventoryrollback.data.LogType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -87,6 +88,65 @@ class PendingRestoreManagerTest {
         // Verify persistence after cancel
         PendingRestoreManager fresh = new PendingRestoreManager(pendingFile);
         assertFalse(fresh.getPending(testUuid).isPresent());
+    }
+
+    // ── Ticket #356: contrato de permisos lectura vs mutacion ──────────────────
+
+    @Test
+    void viewbackupsPuedeMirarPeroNoRestaurar() {
+        // Jugador con SOLO inventoryrollbackplus.viewbackups
+        assertTrue(RestoreSubCmd.mayView(true, true, false),
+                "viewbackups debe poder abrir el comando y listar respaldos");
+        assertFalse(RestoreSubCmd.mayMutate(true, false),
+                "viewbackups NO puede restaurar: contradice plugin.yml y el README");
+    }
+
+    @Test
+    void restorePuedeMirarYMutar() {
+        assertTrue(RestoreSubCmd.mayView(true, false, true));
+        assertTrue(RestoreSubCmd.mayMutate(true, true));
+    }
+
+    @Test
+    void sinPermisosNoEntraAlComando() {
+        assertFalse(RestoreSubCmd.mayView(true, false, false));
+        assertFalse(RestoreSubCmd.mayMutate(true, false));
+    }
+
+    @Test
+    void consolaConservaAccesoTotal() {
+        // La consola/RCON no tiene permisos Bukkit: no debe quedar bloqueada por el fix.
+        assertTrue(RestoreSubCmd.mayView(false, false, false));
+        assertTrue(RestoreSubCmd.mayMutate(false, false));
+        assertTrue(RestoreSubCmd.mayForce(false, false));
+    }
+
+    @Test
+    void forceExigePermisoDeCruceEntreModalidades() {
+        assertFalse(RestoreSubCmd.mayForce(true, false),
+                "--force salta el aislamiento entre modalidades y no puede ser gratis");
+        assertTrue(RestoreSubCmd.mayForce(true, true));
+    }
+
+    // ── Ticket #349/#356: contrato de modalidad de la cola offline ─────────────
+
+    @Test
+    void colaOfflineNoSeAplicaEnLaModalidadEquivocada() {
+        // Copia de clasico, jugador aterrizado en el Lobby tras conectar.
+        assertFalse(PendingRestoreManager.canApplyInGroup("survival", "clasico", false));
+        assertTrue(PendingRestoreManager.canApplyInGroup("clasico", "clasico", false));
+    }
+
+    @Test
+    void colaOfflineIgnoraMayusculasYGrupoDesconocido() {
+        assertTrue(PendingRestoreManager.canApplyInGroup("SkyBlock", "skyblock", false));
+        assertTrue(PendingRestoreManager.canApplyInGroup("survival", "unknown", false));
+        assertTrue(PendingRestoreManager.canApplyInGroup("survival", null, false));
+    }
+
+    @Test
+    void forceAplicaEnCualquierModalidad() {
+        assertTrue(PendingRestoreManager.canApplyInGroup("survival", "oneblock", true));
     }
 
     @Test

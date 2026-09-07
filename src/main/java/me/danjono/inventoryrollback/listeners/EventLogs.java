@@ -86,7 +86,7 @@ public class EventLogs implements Listener {
 		}
 
 		if (this.main != null && this.main.getPendingRestoreManager() != null) {
-			this.main.getPendingRestoreManager().checkAndApply(player);
+			this.main.getPendingRestoreManager().scheduleCheckAndApply(player);
 		}
 	}
 
@@ -352,7 +352,7 @@ public class EventLogs implements Listener {
 		}
 
 		if (this.main != null && this.main.getPendingRestoreManager() != null) {
-			this.main.getPendingRestoreManager().checkAndApply(player);
+			this.main.getPendingRestoreManager().scheduleCheckAndApply(player);
 		}
 	}
 
