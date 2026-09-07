@@ -33,6 +33,54 @@ import java.util.logging.Level;
  */
 public class PlayerResolver {
 
+    /** Prefijo que Floodgate antepone al gamertag de una cuenta Bedrock (default de Geyser). */
+    public static final String BEDROCK_PREFIX = ".";
+
+    /** Plataforma de origen de un perfil registrado en el servidor. */
+    public enum Platform {
+        JAVA,
+        BEDROCK,
+        UNKNOWN
+    }
+
+    /** Con que fidelidad un nombre registrado responde a la consulta escrita por el operador. */
+    public enum MatchQuality {
+        /** Coincidencia literal ignorando mayusculas: misma cuenta, misma plataforma. */
+        EXACT,
+        /** Coincidencia tolerando el prefijo Floodgate: puede cruzar de plataforma. */
+        PREFIX,
+        /** No coincide. */
+        NONE
+    }
+
+    /**
+     * Un UUID sintetico de Floodgate ocupa solo los bits menos significativos:
+     * 00000000-0000-0000-xxxx-xxxxxxxxxxxx. Ninguna cuenta Java premium tiene esa forma.
+     */
+    public static boolean isFloodgateUuid(UUID uuid) {
+        return uuid != null && uuid.getMostSignificantBits() == 0L && uuid.getLeastSignificantBits() != 0L;
+    }
+
+    /** Un nombre con prefijo Floodgate no puede pertenecer a una cuenta Java: Mojang no admite '.'. */
+    public static boolean isBedrockName(String name) {
+        return name != null && name.trim().startsWith(BEDROCK_PREFIX) && name.trim().length() > BEDROCK_PREFIX.length();
+    }
+
+    /** Clasifica un perfil por su UUID sintetico o por el prefijo de su nombre. */
+    public static Platform platformOf(UUID uuid, String name) {
+        if (isFloodgateUuid(uuid) || isBedrockName(name)) return Platform.BEDROCK;
+        if (uuid != null || (name != null && !name.trim().isEmpty())) return Platform.JAVA;
+        return Platform.UNKNOWN;
+    }
+
+    /** Plataforma que el operador esta pidiendo segun como escribio el nombre. */
+    public static Platform platformOfQuery(String query) {
+        if (query == null || query.trim().isEmpty()) return Platform.UNKNOWN;
+        UUID asUuid = tryParseUuid(query);
+        if (asUuid != null) return platformOf(asUuid, null);
+        return isBedrockName(query) ? Platform.BEDROCK : Platform.JAVA;
+    }
+
     public static class ResolvedPlayer {
         private final UUID uuid;
         private final String name;
@@ -40,14 +88,26 @@ public class PlayerResolver {
         private final int backupCount;
         private final long latestBackupTimestamp;
         private final String source;
+        private final Platform platform;
+        private final MatchQuality quality;
+        private final List<ResolvedPlayer> alternates;
 
         public ResolvedPlayer(UUID uuid, String name, OfflinePlayer offlinePlayer, int backupCount, long latestBackupTimestamp, String source) {
+            this(uuid, name, offlinePlayer, backupCount, latestBackupTimestamp, source,
+                    platformOf(uuid, name), MatchQuality.EXACT, Collections.emptyList());
+        }
+
+        public ResolvedPlayer(UUID uuid, String name, OfflinePlayer offlinePlayer, int backupCount, long latestBackupTimestamp,
+                              String source, Platform platform, MatchQuality quality, List<ResolvedPlayer> alternates) {
             this.uuid = uuid;
             this.name = name;
             this.offlinePlayer = offlinePlayer;
             this.backupCount = backupCount;
             this.latestBackupTimestamp = latestBackupTimestamp;
             this.source = source;
+            this.platform = platform != null ? platform : Platform.UNKNOWN;
+            this.quality = quality != null ? quality : MatchQuality.EXACT;
+            this.alternates = alternates != null ? Collections.unmodifiableList(new ArrayList<>(alternates)) : Collections.<ResolvedPlayer>emptyList();
         }
 
         public UUID getUuid() {
@@ -76,6 +136,35 @@ public class PlayerResolver {
             return source;
         }
 
+        public Platform getPlatform() {
+            return platform;
+        }
+
+        public boolean isBedrock() {
+            return platform == Platform.BEDROCK;
+        }
+
+        public MatchQuality getQuality() {
+            return quality;
+        }
+
+        /** Otros perfiles registrados que tambien respondian al nombre consultado. */
+        public List<ResolvedPlayer> getAlternates() {
+            return alternates;
+        }
+
+        /**
+         * Hay homonimos de OTRA plataforma que coinciden con la misma fidelidad.
+         * En ese caso el resolver no puede saber si el inventario es del Java o del Bedrock:
+         * quien ordena debe desempatar con el UUID exacto (#351).
+         */
+        public boolean isCrossPlatformAmbiguous() {
+            for (ResolvedPlayer other : alternates) {
+                if (other.getQuality() == quality && other.getPlatform() != platform) return true;
+            }
+            return false;
+        }
+
         public boolean isOnline() {
             return Bukkit.getPlayer(uuid) != null;
         }
@@ -88,6 +177,8 @@ public class PlayerResolver {
                     ", backupCount=" + backupCount +
                     ", latestBackupTimestamp=" + latestBackupTimestamp +
                     ", source='" + source + '\'' +
+                    ", platform=" + platform +
+                    ", quality=" + quality +
                     '}';
         }
     }
@@ -100,11 +191,41 @@ public class PlayerResolver {
         public long latestBackupTimestamp = 0;
         public boolean isOnline = false;
         public boolean hasPlayed = false;
+        public Platform platform = Platform.UNKNOWN;
+        public MatchQuality quality = MatchQuality.EXACT;
 
         public Candidate(UUID uuid, String name, String source) {
             this.uuid = uuid;
             this.name = name;
             this.source = source;
+            this.platform = platformOf(uuid, name);
+        }
+    }
+
+    /**
+     * Registra un candidato conservando la mejor calidad de coincidencia.
+     * El mismo UUID puede aparecer en varias fuentes (usercache, BentoBox, respaldos);
+     * quedarse con el primer hallazgo perderia el dato de si el nombre coincidia literalmente.
+     */
+    private static void offer(Map<UUID, Candidate> candidates, UUID uuid, String name, String source, String query) {
+        if (uuid == null) return;
+        MatchQuality q = matchQuality(name, query);
+        if (q == MatchQuality.NONE) return;
+
+        Candidate existing = candidates.get(uuid);
+        if (existing == null) {
+            Candidate c = new Candidate(uuid, name, source);
+            c.quality = q;
+            candidates.put(uuid, c);
+            return;
+        }
+        if (q.ordinal() < existing.quality.ordinal()) {
+            existing.quality = q;
+            existing.source = source;
+        }
+        if ((existing.name == null || existing.name.trim().isEmpty()) && name != null) {
+            existing.name = name;
+            existing.platform = platformOf(uuid, name);
         }
     }
 
@@ -140,7 +261,7 @@ public class PlayerResolver {
         collectBentoBoxCandidates(cleanInput, candidates, customBentoBoxDir);
 
         // 2.4 IRP backups on disk
-        collectIrpBackupCandidates(cleanInput, candidates, customBackupsRoot);
+        collectIrpBackupCandidates(cleanInput, candidates, customBackupsRoot, customUsercache);
 
         // 2.5 Bukkit known offline players
         collectBukkitOfflineCandidates(cleanInput, candidates);
@@ -155,8 +276,21 @@ public class PlayerResolver {
         }
 
         // 4. Disambiguation
+        Platform queryPlatform = platformOfQuery(cleanInput);
         List<Candidate> sorted = new ArrayList<>(candidates.values());
         sorted.sort((a, b) -> {
+            // Priority 0: la coincidencia literal manda sobre la tolerante al prefijo Floodgate.
+            // Sin esto un perfil Bedrock homonimo con mas respaldos secuestra la consulta Java (#351).
+            if (a.quality != b.quality) {
+                return Integer.compare(a.quality.ordinal(), b.quality.ordinal());
+            }
+
+            // Priority 0.b: a igualdad de fidelidad, gana el perfil de la plataforma que se pidio.
+            if (queryPlatform != Platform.UNKNOWN && a.platform != b.platform) {
+                if (a.platform == queryPlatform) return -1;
+                if (b.platform == queryPlatform) return 1;
+            }
+
             // Priority 1: Has legitimate backups in IRP
             int aHasBackups = a.backupCount > 0 ? 1 : 0;
             int bHasBackups = b.backupCount > 0 ? 1 : 0;
@@ -199,14 +333,30 @@ public class PlayerResolver {
             else resolvedName = cleanInput;
         }
 
+        List<ResolvedPlayer> alternates = new ArrayList<>();
+        for (int i = 1; i < sorted.size(); i++) {
+            Candidate other = sorted.get(i);
+            alternates.add(new ResolvedPlayer(other.uuid, other.name, null, other.backupCount, other.latestBackupTimestamp,
+                    other.source, other.platform, other.quality, Collections.<ResolvedPlayer>emptyList()));
+        }
+
+        ResolvedPlayer result = new ResolvedPlayer(best.uuid, resolvedName, op, best.backupCount, best.latestBackupTimestamp,
+                best.source, best.platform, best.quality, alternates);
+
         if (sorted.size() > 1 && InventoryRollbackPlus.getInstance() != null) {
-            InventoryRollbackPlus.getInstance().getLogger().info(
+            Level level = result.isCrossPlatformAmbiguous() ? Level.WARNING : Level.INFO;
+            InventoryRollbackPlus.getInstance().getLogger().log(level,
                     "[PlayerResolver] Disambiguated '" + cleanInput + "': Selected UUID " + best.uuid +
-                            " (" + best.backupCount + " backups, latest: " + best.latestBackupTimestamp + ", source=" + best.source + ") out of " + sorted.size() + " registered candidates."
+                            " (" + best.platform + ", match=" + best.quality + ", " + best.backupCount + " backups, latest: "
+                            + best.latestBackupTimestamp + ", source=" + best.source + ") out of " + sorted.size()
+                            + " registered candidates."
+                            + (result.isCrossPlatformAmbiguous()
+                                ? " HOMONIMOS DE OTRA PLATAFORMA: la orden debe desempatarse por UUID."
+                                : "")
             );
         }
 
-        return Optional.of(new ResolvedPlayer(best.uuid, resolvedName, op, best.backupCount, best.latestBackupTimestamp, best.source));
+        return Optional.of(result);
     }
 
     private static Optional<ResolvedPlayer> resolveByExactUuid(UUID uuid, String rawInput, File customUsercache, File customBentoBoxDir, File customBackupsRoot) {
@@ -237,7 +387,9 @@ public class PlayerResolver {
         } catch (Throwable ignored) {}
 
         String finalName = c.name != null ? c.name : (op != null && op.getName() != null ? op.getName() : rawInput);
-        return Optional.of(new ResolvedPlayer(uuid, finalName, op, c.backupCount, c.latestBackupTimestamp, c.source));
+        // Un UUID explicito no admite homonimia: la plataforma sale del propio UUID (Floodgate usa msb=0).
+        return Optional.of(new ResolvedPlayer(uuid, finalName, op, c.backupCount, c.latestBackupTimestamp, c.source,
+                platformOf(uuid, finalName), MatchQuality.EXACT, Collections.<ResolvedPlayer>emptyList()));
     }
 
     private static void populateCandidateStats(Candidate c, File customBackupsRoot) {
@@ -287,12 +439,10 @@ public class PlayerResolver {
         try {
             Player p = Bukkit.getPlayerExact(inputName);
             if (p != null) {
-                candidates.put(p.getUniqueId(), new Candidate(p.getUniqueId(), p.getName(), "online_exact"));
+                offer(candidates, p.getUniqueId(), p.getName(), "online_exact", inputName);
             }
             for (Player op : Bukkit.getOnlinePlayers()) {
-                if (matchesPlayerName(op.getName(), inputName)) {
-                    candidates.putIfAbsent(op.getUniqueId(), new Candidate(op.getUniqueId(), op.getName(), "online_list"));
-                }
+                offer(candidates, op.getUniqueId(), op.getName(), "online_list", inputName);
             }
         } catch (Throwable ignored) {}
     }
@@ -325,12 +475,10 @@ public class PlayerResolver {
                     JsonObject obj = el.getAsJsonObject();
                     if (obj.has("name") && obj.has("uuid")) {
                         String entryName = obj.get("name").getAsString();
-                        if (matchesPlayerName(entryName, inputName)) {
-                            try {
-                                UUID u = UUID.fromString(obj.get("uuid").getAsString());
-                                candidates.putIfAbsent(u, new Candidate(u, entryName, "usercache"));
-                            } catch (IllegalArgumentException ignored) {}
-                        }
+                        try {
+                            UUID u = UUID.fromString(obj.get("uuid").getAsString());
+                            offer(candidates, u, entryName, "usercache", inputName);
+                        } catch (IllegalArgumentException ignored) {}
                     }
                 }
             }
@@ -405,10 +553,10 @@ public class PlayerResolver {
                     if (uuidStr == null && f.getName().length() >= 36) {
                         uuidStr = f.getName().substring(0, 36);
                     }
-                    if (name != null && uuidStr != null && matchesPlayerName(name, inputName)) {
+                    if (name != null && uuidStr != null) {
                         try {
                             UUID u = UUID.fromString(uuidStr);
-                            candidates.putIfAbsent(u, new Candidate(u, name, "bentobox"));
+                            offer(candidates, u, name, "bentobox", inputName);
                         } catch (IllegalArgumentException ignored) {}
                     }
                 }
@@ -416,7 +564,7 @@ public class PlayerResolver {
         }
     }
 
-    private static void collectIrpBackupCandidates(String inputName, Map<UUID, Candidate> candidates, File customBackupsRoot) {
+    private static void collectIrpBackupCandidates(String inputName, Map<UUID, Candidate> candidates, File customBackupsRoot, File customUsercache) {
         File backupsRoot = customBackupsRoot;
         if (backupsRoot == null) {
             try {
@@ -441,12 +589,19 @@ public class PlayerResolver {
                 if (checkedUuids.add(folderName)) {
                     UUID u = tryParseUuid(folderName);
                     if (u != null) {
+                        String knownName = null;
                         try {
                             OfflinePlayer op = Bukkit.getOfflinePlayer(u);
-                            if (op != null && op.getName() != null && matchesPlayerName(op.getName(), inputName)) {
-                                candidates.putIfAbsent(u, new Candidate(u, op.getName(), "irp_backups"));
-                            }
+                            if (op != null) knownName = op.getName();
                         } catch (Throwable ignored) {}
+                        if (knownName == null) {
+                            // Un perfil Bedrock rara vez tiene nombre en la cache de Bukkit:
+                            // sin este respaldo su carpeta de backups quedaba irresoluble por nombre (#351).
+                            Candidate probe = new Candidate(u, null, "irp_backups");
+                            findNameInUsercache(u, probe, customUsercache);
+                            knownName = probe.name;
+                        }
+                        offer(candidates, u, knownName, "irp_backups", inputName);
                     }
                 }
             }
@@ -456,28 +611,39 @@ public class PlayerResolver {
     private static void collectBukkitOfflineCandidates(String inputName, Map<UUID, Candidate> candidates) {
         try {
             for (OfflinePlayer op : Bukkit.getOfflinePlayers()) {
-                if (op.getName() != null && matchesPlayerName(op.getName(), inputName)) {
-                    if (op.hasPlayedBefore()) {
-                        candidates.putIfAbsent(op.getUniqueId(), new Candidate(op.getUniqueId(), op.getName(), "bukkit_offline"));
-                    }
+                if (op.getName() != null && op.hasPlayedBefore()) {
+                    offer(candidates, op.getUniqueId(), op.getName(), "bukkit_offline", inputName);
                 }
             }
         } catch (Throwable ignored) {}
     }
 
-    public static boolean matchesPlayerName(String registeredName, String queryName) {
-        if (registeredName == null || queryName == null) return false;
-        if (registeredName.equalsIgnoreCase(queryName)) return true;
+    /**
+     * Fidelidad de la coincidencia. La distincion importa: tolerar el prefijo Floodgate
+     * permite encontrar al Bedrock, pero NO debe empatar con el Java que se llama igual (#351).
+     */
+    public static MatchQuality matchQuality(String registeredName, String queryName) {
+        if (registeredName == null || queryName == null) return MatchQuality.NONE;
+        String registered = registeredName.trim();
+        String query = queryName.trim();
+        if (registered.isEmpty() || query.isEmpty()) return MatchQuality.NONE;
+
+        if (registered.equalsIgnoreCase(query)) return MatchQuality.EXACT;
 
         // Bedrock Floodgate prefix handling (e.g. .Pasiente vs Pasiente)
-        if (registeredName.startsWith(".") && registeredName.substring(1).equalsIgnoreCase(queryName)) {
-            return true;
+        int plen = BEDROCK_PREFIX.length();
+        if (registered.startsWith(BEDROCK_PREFIX) && registered.substring(plen).equalsIgnoreCase(query)) {
+            return MatchQuality.PREFIX;
         }
-        if (queryName.startsWith(".") && queryName.substring(1).equalsIgnoreCase(registeredName)) {
-            return true;
+        if (query.startsWith(BEDROCK_PREFIX) && query.substring(plen).equalsIgnoreCase(registered)) {
+            return MatchQuality.PREFIX;
         }
 
-        return false;
+        return MatchQuality.NONE;
+    }
+
+    public static boolean matchesPlayerName(String registeredName, String queryName) {
+        return matchQuality(registeredName, queryName) != MatchQuality.NONE;
     }
 
     public static UUID tryParseUuid(String s) {

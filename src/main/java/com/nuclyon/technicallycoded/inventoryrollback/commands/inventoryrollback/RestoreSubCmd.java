@@ -143,6 +143,12 @@ public class RestoreSubCmd extends IRPCommand {
         // A partir de aqui la orden MUTA el inventario del jugador: viewbackups ya no basta (#356).
         if (!denyIfCannotMutate(sender)) return;
 
+        // Homonimos Java/Bedrock: adivinar el perfil equivale a entregar el inventario ajeno (#351).
+        if (resolved.isCrossPlatformAmbiguous()) {
+            reportCrossPlatformAmbiguity(sender, targetArg, resolved);
+            return;
+        }
+
         // --force omite la barrera entre modalidades: exige el permiso de cruce explicito (#356).
         if (isForce && !mayForce(sender instanceof Player, sender.hasPermission(WorldGroupPolicy.BYPASS_PERMISSION))) {
             sender.sendMessage("§c[IRP] §f--force §csalta el aislamiento entre modalidades y requiere §f"
@@ -274,7 +280,24 @@ public class RestoreSubCmd extends IRPCommand {
                 + (isForce ? " §c(con --force inmediato)" : "") + "§7.");
     }
 
+    /** Enumera los perfiles homonimos con su plataforma para que el operador elija por UUID (#351). */
+    private void reportCrossPlatformAmbiguity(CommandSender sender, String query, PlayerResolver.ResolvedPlayer resolved) {
+        sender.sendMessage("§c[IRP] §e" + query + " §ccoincide con perfiles registrados de plataformas distintas.");
+        sender.sendMessage("§7Candidato §f" + resolved.getName() + " §7| §b" + resolved.getPlatform()
+                + " §7| §f" + resolved.getUuid() + " §7| " + resolved.getBackupCount() + " respaldos");
+        for (PlayerResolver.ResolvedPlayer other : resolved.getAlternates()) {
+            sender.sendMessage("§7Candidato §f" + other.getName() + " §7| §b" + other.getPlatform()
+                    + " §7| §f" + other.getUuid() + " §7| " + other.getBackupCount() + " respaldos");
+        }
+        sender.sendMessage("§7Repite la orden con el §fUUID exacto§7 del perfil a restaurar.");
+        sender.sendMessage("§7Los perfiles Bedrock (Floodgate) usan UUID §f00000000-0000-0000-xxxx-xxxxxxxxxxxx§7.");
+    }
+
     private void showUnifiedBackupList(CommandSender sender, PlayerResolver.ResolvedPlayer resolved) {
+        if (resolved.isCrossPlatformAmbiguous()) {
+            sender.sendMessage("§6[IRP] Aviso: hay §f" + (resolved.getAlternates().size() + 1)
+                    + " §6perfiles homonimos de distinta plataforma. Se listan los de §f" + resolved.getPlatform() + "§6.");
+        }
         List<BackupEntry> backups = BackupQueryUtil.getUnifiedBackups(resolved.getUuid());
         if (backups.isEmpty()) {
             sender.sendMessage("§e[IRP] No hay respaldos registrados para §6" + resolved.getName() + " §7(" + resolved.getUuid() + ").");
