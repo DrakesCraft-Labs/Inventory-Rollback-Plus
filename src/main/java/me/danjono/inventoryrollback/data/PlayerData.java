@@ -1,5 +1,6 @@
 package me.danjono.inventoryrollback.data;
 
+import java.io.IOException;
 import java.sql.SQLException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -9,6 +10,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 import com.nuclyon.technicallycoded.inventoryrollback.InventoryRollbackPlus;
+import com.nuclyon.technicallycoded.inventoryrollback.util.BackupPersistence;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.inventory.ItemStack;
@@ -129,28 +131,29 @@ public class PlayerData {
 
         boolean saveAsync = !InventoryRollbackPlus.getInstance().isShuttingDown() && shouldSaveAsync;
         Runnable purgeTask = () -> {
-            int maxSaves = getMaxSaves();
-            int currentSaves = getAmountOfBackups();
+            try {
+                int maxSaves = getMaxSaves();
+                int currentSaves = getAmountOfBackups();
 
-            if((maxSaves >0) && (currentSaves >= maxSaves)) {
-                int deleteAmount = currentSaves - maxSaves + 1;
+                if((maxSaves >0) && (currentSaves >= maxSaves)) {
+                    int deleteAmount = currentSaves - maxSaves + 1;
 
-                if (ConfigData.getSaveType() == SaveType.YAML) {
-                    yaml.purgeExcessSaves(deleteAmount);
-                } else if (ConfigData.getSaveType() == SaveType.MYSQL) {
-                    try {
+                    if (ConfigData.getSaveType() == SaveType.YAML) {
+                        yaml.purgeExcessSaves(deleteAmount);
+                    } else if (ConfigData.getSaveType() == SaveType.MYSQL) {
                         mysql.purgeExcessSaves(deleteAmount);
-                    } catch (SQLException e) {
-                        e.printStackTrace();
                     }
                 }
+                future.complete(null);
+            } catch (SQLException | RuntimeException | Error e) {
+                // Ticket #373 (QA): cualquier fallo que escape aqui dejaba el future sin completar
+                // y hacia esperar al llamador hasta su propio timeout. Se reporta como fallo de la
+                // purga; el guardado posterior decide aparte si la copia llego a disco.
+                future.completeExceptionally(e);
             }
-            future.complete(null);
         };
 
-        InventoryRollbackPlus instance = InventoryRollbackPlus.getInstance();
-        if (saveAsync) instance.getServer().getScheduler().runTaskAsynchronously(instance, purgeTask);
-        else purgeTask.run();
+        ejecutar(saveAsync, purgeTask, future);
 
         return future;
     }
@@ -455,25 +458,44 @@ public class PlayerData {
         Runnable saveDataTask = () -> {
             try {
                 if (ConfigData.getSaveType() == SaveType.YAML) {
-                    yaml.saveData();
+                    // saveDataChecked, no saveData: la variante muda tragaba la IOException y el
+                    // future se completaba como exito sin fichero en disco (ticket #373, QA).
+                    yaml.saveDataChecked();
                 } else if (ConfigData.getSaveType() == SaveType.MYSQL) {
-                    try {
-                        mysql.saveData();
-                    } catch (SQLException e) {
-                        e.printStackTrace();
-                    }
+                    mysql.saveData();
                 }
                 future.complete(null);
+            } catch (IOException | SQLException e) {
+                e.printStackTrace();
+                future.completeExceptionally(e);
             } catch (RuntimeException | Error e) {
                 future.completeExceptionally(e);
                 throw e;
             }
         };
 
-        if (saveAsync) Bukkit.getScheduler().runTaskAsynchronously(InventoryRollback.getInstance(),saveDataTask);
-        else saveDataTask.run();
+        ejecutar(saveAsync, saveDataTask, future);
 
         return future;
+    }
+
+    /**
+     * Ejecuta la tarea de almacenamiento y garantiza que el future siempre termina.
+     *
+     * <p>Ticket #373 (QA): si el envio al scheduler falla -- tipicamente porque el plugin ya esta
+     * deshabilitado durante el apagado -- la tarea nunca corre. Sin este cierre el future quedaba
+     * pendiente para siempre y el acuse de {@code /irp forcebackup} no llegaba ni como error, de
+     * modo que la sincronizacion previa al reinicio consumia su espera completa antes de abortar.
+     */
+    private static void ejecutar(boolean async, Runnable tarea, CompletableFuture<Void> future) {
+        if (!async) {
+            tarea.run();
+            return;
+        }
+
+        BackupPersistence.submitOrFail(
+                () -> Bukkit.getScheduler().runTaskAsynchronously(InventoryRollback.getInstance(), tarea),
+                future);
     }
 
     public int getMaxSaves() {

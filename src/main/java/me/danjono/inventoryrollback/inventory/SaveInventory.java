@@ -19,7 +19,9 @@ import org.jetbrains.annotations.Nullable;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.UUID;
+import com.nuclyon.technicallycoded.inventoryrollback.util.BackupPersistence;
 import java.util.concurrent.CompletableFuture;
+import java.util.logging.Level;
 
 public class SaveInventory {
 
@@ -113,8 +115,14 @@ public class SaveInventory {
                 // Remove excess saves if limit is reached
                 CompletableFuture<Void> purgeTask = data.purgeExcessSaves(saveAsync);
 
-                // Save new data
-                purgeTask.thenCompose(ignored -> data.saveData(saveAsync))
+                // Save new data. La purga borra copias viejas, asi que su fallo se registra pero no
+                // cancela la escritura de la copia nueva: abortar aqui perderia justo el respaldo
+                // que se pidio (ticket #373, QA). Solo el guardado decide el resultado del future.
+                BackupPersistence.afterPurge(purgeTask,
+                                () -> data.saveData(saveAsync),
+                                purgeError -> main.getLogger().log(Level.WARNING,
+                                        "Could not purge excess backups for " + player.getName()
+                                                + "; the new backup is still being written", purgeError))
                         .whenComplete((ignored, error) -> {
                             if (error != null) saved.completeExceptionally(error);
                             else saved.complete(null);
@@ -125,7 +133,11 @@ public class SaveInventory {
             }
         };
 
-        if (saveAsync) main.getServer().getScheduler().runTaskAsynchronously(main, saveTask);
+        // El scheduler rechaza tareas cuando el plugin ya esta deshabilitado; sin cerrar el future
+        // en ese caso, quien lo esperaba -- el acuse de forcebackup y con el la sincronizacion
+        // previa al reinicio -- agotaba su espera en vez de recibir el fallo (#373, QA).
+        if (saveAsync) BackupPersistence.submitOrFail(
+                () -> main.getServer().getScheduler().runTaskAsynchronously(main, saveTask), saved);
         else saveTask.run();
 
         return saved;

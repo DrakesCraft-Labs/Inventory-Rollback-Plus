@@ -111,23 +111,17 @@ public class Commands implements CommandExecutor, TabCompleter {
                     suggestions.add(option);
             }
             return suggestions;
-        } else if ((args.length == 3 || args.length == 4) &&
+        } else if (args.length == 3 && args[1].equalsIgnoreCase("player") &&
                 (args[0].equalsIgnoreCase("forcebackup") || args[0].equalsIgnoreCase("forcesave")) &&
                 commandSender.hasPermission("inventoryrollbackplus.forcebackup")
         ) {
-            // Ticket #373: --sync fuerza la escritura antes de responder. Solo tiene sentido tras
-            // "all" (3 argumentos) o tras el nombre en "player" (4 argumentos).
             ArrayList<String> suggestions = new ArrayList<>();
-            String prefix = args[args.length - 1].toLowerCase();
-            if (args.length == 3 && args[1].equalsIgnoreCase("player")) {
-                try {
-                    for (org.bukkit.entity.Player p : org.bukkit.Bukkit.getOnlinePlayers()) {
-                        if (p.getName().toLowerCase().startsWith(prefix)) suggestions.add(p.getName());
-                    }
-                } catch (Throwable ignored) {}
-            } else if ("--sync".startsWith(prefix)) {
-                suggestions.add("--sync");
-            }
+            String prefix = args[2].toLowerCase();
+            try {
+                for (org.bukkit.entity.Player p : org.bukkit.Bukkit.getOnlinePlayers()) {
+                    if (p.getName().toLowerCase().startsWith(prefix)) suggestions.add(p.getName());
+                }
+            } catch (Throwable ignored) {}
             return suggestions;
         } else if (args.length == 3 && args[0].equalsIgnoreCase("restore")) {
             ArrayList<String> suggestions = new ArrayList<>();

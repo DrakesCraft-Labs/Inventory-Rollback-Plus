@@ -353,7 +353,17 @@ public class YAML {
         return data.getString("deathReason");
     }
 
-    public void saveData() {
+    /**
+     * Escribe la copia y propaga el fallo de E/S.
+     *
+     * <p>Ticket #373 (QA): {@link #saveData()} traga la {@link IOException}, asi que quien esperaba
+     * su future lo veia completarse con exito aunque el fichero no llegara a disco -- y el acuse de
+     * {@code /irp forcebackup} volvia a describir el intento en vez de la escritura. Este metodo es
+     * la variante que si falla, para los llamadores que necesitan esa garantia.
+     *
+     * @throws IOException si el YAML no pudo escribirse
+     */
+    public void saveDataChecked() throws IOException {
         data.set("inventory", mainInventory);
         data.set("armour", armour);
         data.set("enderchest", enderChest);
@@ -369,8 +379,12 @@ public class YAML {
         data.set("version", packageVersion);
         data.set("deathReason", deathReason);
 
+        data.save(backupFile);
+    }
+
+    public void saveData() {
         try {
-            data.save(backupFile);
+            saveDataChecked();
         } catch (IOException e) {
             e.printStackTrace();
 
