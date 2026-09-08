@@ -437,23 +437,43 @@ public class PlayerData {
         return null;
     }
 
-    public void saveData(boolean shouldSaveAsync) {
+    /**
+     * Escribe la copia en el almacenamiento configurado.
+     *
+     * <p>Ticket #373: devuelve un future que solo se completa cuando el dato esta en disco (o en
+     * MySQL), de modo que quien necesite una barrera real -- el acuse de {@code /irp forcebackup}
+     * y con el la sincronizacion previa al reinicio -- pueda esperar a la escritura en vez de al
+     * encolado. Los llamadores que ignoran el valor devuelto conservan el comportamiento anterior.
+     *
+     * @param shouldSaveAsync si la escritura puede delegarse al scheduler asincrono
+     * @return future completado al terminar la escritura; excepcionalmente si esta falla
+     */
+    public CompletableFuture<Void> saveData(boolean shouldSaveAsync) {
         boolean saveAsync = !InventoryRollbackPlus.getInstance().isShuttingDown() && shouldSaveAsync;
 
+        CompletableFuture<Void> future = new CompletableFuture<>();
         Runnable saveDataTask = () -> {
-            if (ConfigData.getSaveType() == SaveType.YAML) {
-                yaml.saveData();
-            } else if (ConfigData.getSaveType() == SaveType.MYSQL) {
-                try {
-                    mysql.saveData();
-                } catch (SQLException e) {
-                    e.printStackTrace();
+            try {
+                if (ConfigData.getSaveType() == SaveType.YAML) {
+                    yaml.saveData();
+                } else if (ConfigData.getSaveType() == SaveType.MYSQL) {
+                    try {
+                        mysql.saveData();
+                    } catch (SQLException e) {
+                        e.printStackTrace();
+                    }
                 }
+                future.complete(null);
+            } catch (RuntimeException | Error e) {
+                future.completeExceptionally(e);
+                throw e;
             }
         };
 
         if (saveAsync) Bukkit.getScheduler().runTaskAsynchronously(InventoryRollback.getInstance(),saveDataTask);
         else saveDataTask.run();
+
+        return future;
     }
 
     public int getMaxSaves() {

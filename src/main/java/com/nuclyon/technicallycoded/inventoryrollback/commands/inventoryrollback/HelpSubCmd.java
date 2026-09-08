@@ -28,7 +28,7 @@ public class HelpSubCmd extends IRPCommand {
                 MessageData.getPluginPrefix() + ChatColor.GRAY + "InventoryRollbackPlus - by TechnicallyCoded\n" +
                         ChatColor.WHITE + "  Available Commands:\n" +
                         ChatColor.WHITE + "    /irp restore [player]" + ChatColor.GRAY + " - Open rollback GUI for optional [player]\n" +
-                        ChatColor.WHITE + "    /irp forcebackup <all/player> [player]" + ChatColor.GRAY + " - Create a forced save of a player's inventory\n" +
+                        ChatColor.WHITE + "    /irp forcebackup <all/player> [player] [--sync]" + ChatColor.GRAY + " - Create a forced save of a player's inventory. The confirmation is only sent once the backup is on disk; --sync writes it on the calling thread (blocking, intended for console before a restart)\n" +
                         ChatColor.WHITE + "    /irp enable" + ChatColor.GRAY + " - Enable the plugin\n" +
                         ChatColor.WHITE + "    /irp disable" + ChatColor.GRAY + " - Disable the plugin\n" +
                         ChatColor.WHITE + "    /irp reload" + ChatColor.GRAY + " - Reload the plugin\n" +

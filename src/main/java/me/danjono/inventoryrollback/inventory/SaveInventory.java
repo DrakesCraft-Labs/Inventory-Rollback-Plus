@@ -42,15 +42,32 @@ public class SaveInventory {
         this.causeAlias = causeAliasIn;
     }
 
-    public void snapshotAndSave(PlayerInventory mainInventory, Inventory enderChestInventory, boolean saveAsync) {
+    /**
+     * Toma la instantanea del inventario y la guarda.
+     *
+     * @return future completado cuando la copia esta en disco; ya completado si no habia nada que
+     *         guardar. Ver {@link #save(PlayerDataSnapshot, boolean)} (ticket #373).
+     */
+    public CompletableFuture<Void> snapshotAndSave(PlayerInventory mainInventory, Inventory enderChestInventory, boolean saveAsync) {
         PlayerDataSnapshot snapshot = createSnapshot(mainInventory, enderChestInventory);
-        if (snapshot == null) return;
-        
-        save(snapshot, saveAsync);
+        if (snapshot == null) return CompletableFuture.completedFuture(null);
+
+        return save(snapshot, saveAsync);
     }
 
-    public void save(PlayerDataSnapshot snapshot, boolean async) {
-        if (snapshot == null) return;
+    /**
+     * Guarda una instantanea ya tomada.
+     *
+     * <p>Ticket #373: cuando {@code async} es cierto la escritura se delega al scheduler, asi que
+     * el retorno del metodo NO significa que el YAML este en disco. El future devuelto si lo
+     * significa: se completa tras la purga de copias sobrantes y la escritura efectiva. Los
+     * llamadores que lo ignoran mantienen el comportamiento previo.
+     *
+     * @return future completado cuando la copia esta en disco; ya completado si se descarto el
+     *         guardado (instantanea nula o limitador de tasa).
+     */
+    public CompletableFuture<Void> save(PlayerDataSnapshot snapshot, boolean async) {
+        if (snapshot == null) return CompletableFuture.completedFuture(null);
         UUID uuid = player.getUniqueId();
 
         // Rate limiter
@@ -63,44 +80,55 @@ public class SaveInventory {
         if (userLogRateLimiter.isRateLimitExceeded(logType)) {
             main.getLogger().warning("Player " + player.getName() + " is being rate limited! This means that something is causing this log to be created FASTER than even once per tick! Log type: " + logType.name());
             new IllegalStateException("Rate limiting reached! This should never happen under normal operation!").printStackTrace();
-            return;
+            return CompletableFuture.completedFuture(null);
         }
 
         boolean saveAsync = !InventoryRollbackPlus.getInstance().isShuttingDown() && async;
+        CompletableFuture<Void> saved = new CompletableFuture<>();
         Runnable saveTask = () -> {
-            PlayerData data = new PlayerData(player, logType, timestamp);
+            try {
+                PlayerData data = new PlayerData(player, logType, timestamp);
 
-            if (snapshot.finalMainInvContents != null) data.setMainInventory(snapshot.finalMainInvContents);
-            if (snapshot.finalMainInvArmor != null) data.setArmour(snapshot.finalMainInvArmor);
-            if (snapshot.finalEnderInvContents != null) data.setEnderChest(snapshot.finalEnderInvContents);
+                if (snapshot.finalMainInvContents != null) data.setMainInventory(snapshot.finalMainInvContents);
+                if (snapshot.finalMainInvArmor != null) data.setArmour(snapshot.finalMainInvArmor);
+                if (snapshot.finalEnderInvContents != null) data.setEnderChest(snapshot.finalEnderInvContents);
 
-            data.setXP(snapshot.totalXp);
-            data.setHealth(snapshot.health);
-            data.setFoodLevel(snapshot.foodLevel);
-            data.setSaturation(snapshot.saturation);
-            data.setWorld(snapshot.worldName);
+                data.setXP(snapshot.totalXp);
+                data.setHealth(snapshot.health);
+                data.setFoodLevel(snapshot.foodLevel);
+                data.setSaturation(snapshot.saturation);
+                data.setWorld(snapshot.worldName);
 
-            data.setX(snapshot.locX);
-            data.setY(snapshot.locY);
-            data.setZ(snapshot.locZ);
+                data.setX(snapshot.locX);
+                data.setY(snapshot.locY);
+                data.setZ(snapshot.locZ);
 
-            data.setLogType(logType);
-            data.setVersion(InventoryRollback.getPackageVersion());
+                data.setLogType(logType);
+                data.setVersion(InventoryRollback.getPackageVersion());
 
-            if (causeAlias != null) data.setDeathReason(causeAlias);
-            else if (deathCause != null) data.setDeathReason(deathCause.name());
-            else if (logType == LogType.DEATH) data.setDeathReason("UNKNOWN");
+                if (causeAlias != null) data.setDeathReason(causeAlias);
+                else if (deathCause != null) data.setDeathReason(deathCause.name());
+                else if (logType == LogType.DEATH) data.setDeathReason("UNKNOWN");
 
-            // Remove excess saves if limit is reached
-            CompletableFuture<Void> purgeTask = data.purgeExcessSaves(saveAsync);
+                // Remove excess saves if limit is reached
+                CompletableFuture<Void> purgeTask = data.purgeExcessSaves(saveAsync);
 
-            // Save new data
-            purgeTask.thenRun(() -> data.saveData(saveAsync));
+                // Save new data
+                purgeTask.thenCompose(ignored -> data.saveData(saveAsync))
+                        .whenComplete((ignored, error) -> {
+                            if (error != null) saved.completeExceptionally(error);
+                            else saved.complete(null);
+                        });
+            } catch (RuntimeException | Error e) {
+                saved.completeExceptionally(e);
+                throw e;
+            }
         };
 
         if (saveAsync) main.getServer().getScheduler().runTaskAsynchronously(main, saveTask);
         else saveTask.run();
 
+        return saved;
     }
 
     public @Nullable PlayerDataSnapshot createSnapshot(PlayerInventory mainInventory, Inventory enderChestInventory) {

@@ -2,6 +2,7 @@ package com.nuclyon.technicallycoded.inventoryrollback.commands.inventoryrollbac
 
 import com.nuclyon.technicallycoded.inventoryrollback.InventoryRollbackPlus;
 import com.nuclyon.technicallycoded.inventoryrollback.commands.IRPCommand;
+import com.nuclyon.technicallycoded.inventoryrollback.util.ForceBackupAcknowledgement;
 import me.danjono.inventoryrollback.config.MessageData;
 import me.danjono.inventoryrollback.data.LogType;
 import me.danjono.inventoryrollback.inventory.SaveInventory;
@@ -11,24 +12,35 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+
 public class ForceBackupSubCmd extends IRPCommand {
 
     public ForceBackupSubCmd(InventoryRollbackPlus mainIn) {
         super(mainIn);
     }
 
+    /** Bandera del ticket #373: fuerza la escritura en el hilo llamante en vez de delegarla. */
+    private static final String SYNC_FLAG = "--sync";
+
     @Override
     public void onCommand(CommandSender sender, Command cmd, String label, String[] args) {
         if (sender.hasPermission("inventoryrollbackplus.forcebackup")) {
-            if (args.length == 1 || args.length > 3) {
+            // Ticket #373: se acepta un --sync final, asi que el limite sube en un argumento.
+            boolean sync = args.length > 1 && args[args.length - 1].equalsIgnoreCase(SYNC_FLAG);
+            String[] positional = sync ? java.util.Arrays.copyOf(args, args.length - 1) : args;
+
+            if (positional.length == 1 || positional.length > 3) {
                 sender.sendMessage(MessageData.getPluginPrefix() + MessageData.getError());
                 return;
             }
 
-            if (args[1].equalsIgnoreCase("all")) {
-                forceBackupAll(sender);
-            } else if (args[1].equalsIgnoreCase("player")) {
-                forceBackupPlayer(sender, args);
+            if (positional[1].equalsIgnoreCase("all")) {
+                forceBackupAll(sender, sync);
+            } else if (positional[1].equalsIgnoreCase("player")) {
+                forceBackupPlayer(sender, positional, sync);
             } else {
                 sender.sendMessage(MessageData.getPluginPrefix() + MessageData.getError());
             }
@@ -37,16 +49,17 @@ public class ForceBackupSubCmd extends IRPCommand {
         }
     }
 
-    private void forceBackupAll(CommandSender sender) {
+    private void forceBackupAll(CommandSender sender, boolean sync) {
+        List<CompletableFuture<Void>> pending = new ArrayList<>();
         for (Player player : Bukkit.getOnlinePlayers()) {
-            new SaveInventory(player, LogType.FORCE, null, null)
-                    .snapshotAndSave(player.getInventory(), player.getEnderChest(), true);
+            pending.add(new SaveInventory(player, LogType.FORCE, null, null)
+                    .snapshotAndSave(player.getInventory(), player.getEnderChest(), !sync));
         }
 
-        sender.sendMessage(MessageData.getPluginPrefix() + MessageData.getForceBackupAll());
+        acusarCuandoEsteEnDisco(sender, pending, MessageData.getForceBackupAll());
     }
 
-    private void forceBackupPlayer(CommandSender sender, String[] args) {
+    private void forceBackupPlayer(CommandSender sender, String[] args, boolean sync) {
         if (args.length == 2) {
             sender.sendMessage(MessageData.getPluginPrefix() + MessageData.getError());
             return;
@@ -65,10 +78,40 @@ public class ForceBackupSubCmd extends IRPCommand {
         }
 
         Player player = (Player) offlinePlayer;
-        new SaveInventory(player, LogType.FORCE, null, null)
-                .snapshotAndSave(player.getInventory(), player.getEnderChest(), true);
+        CompletableFuture<Void> pending = new SaveInventory(player, LogType.FORCE, null, null)
+                .snapshotAndSave(player.getInventory(), player.getEnderChest(), !sync);
 
-        sender.sendMessage(MessageData.getPluginPrefix() + MessageData.getForceBackupPlayer(offlinePlayer.getName()));
+        acusarCuandoEsteEnDisco(sender, java.util.Collections.singletonList(pending),
+                MessageData.getForceBackupPlayer(offlinePlayer.getName()));
+    }
+
+    /**
+     * Emite el acuse solo cuando todas las copias estan escritas (ticket #373).
+     *
+     * <p>Antes el mensaje salia justo despues de encolar las tareas asincronas, asi que quien lo
+     * leia -- notablemente la sincronizacion previa al reinicio de {@code reinicio_seguro.py}, que
+     * espera la linea "force saved" en la consola -- creia tener una barrera cuando solo tenia un
+     * acuse de encolado. Ahora la linea aparece cuando el YAML esta en disco; si alguna escritura
+     * falla no se emite el acuse, de modo que el llamador falla cerrado en vez de reiniciar sobre
+     * una copia inexistente.
+     */
+    private void acusarCuandoEsteEnDisco(CommandSender sender, List<CompletableFuture<Void>> pending, String mensaje) {
+        ForceBackupAcknowledgement.onAllPersisted(pending,
+                () -> enviar(sender, MessageData.getPluginPrefix() + mensaje),
+                error -> {
+                    main.getLogger().warning("Force backup failed, no acknowledgement sent: " + error.getMessage());
+                    enviar(sender, MessageData.getPluginPrefix() + MessageData.getError());
+                });
+    }
+
+    /** Devuelve el mensaje al hilo principal cuando la escritura termino en un hilo asincrono. */
+    private void enviar(CommandSender sender, String mensaje) {
+        if (Bukkit.isPrimaryThread() || !main.isEnabled()) {
+            sender.sendMessage(mensaje);
+            return;
+        }
+
+        Bukkit.getScheduler().runTask(main, () -> sender.sendMessage(mensaje));
     }
 
 }
